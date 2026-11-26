@@ -58,6 +58,8 @@ export interface KartState {
   headGroup?: THREE.Group;
   steerWheel?: THREE.Mesh;
   lookBackTimer?: number;
+  wrongWay?: boolean;
+  wrongWaySprite?: THREE.Sprite;
 }
 
 function createNameplateSprite(name: string, accentColor: string): THREE.Sprite {
@@ -83,7 +85,7 @@ function createNameplateSprite(name: string, accentColor: string): THREE.Sprite 
   ctx.font = '800 22px Inter, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(name.slice(0, 12), 44, 33);
+  ctx.fillText(name, 44, 33, 198);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -91,6 +93,36 @@ function createNameplateSprite(name: string, accentColor: string): THREE.Sprite 
   const sprite = new THREE.Sprite(mat);
   sprite.position.set(0, 3.2, 0);
   sprite.scale.set(3.4, 0.85, 1);
+  return sprite;
+}
+
+function createWrongWaySprite(): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 68;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = 'rgba(220, 38, 38, 0.92)';
+  ctx.strokeStyle = '#fde047';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(8, 8, 240, 52, 18);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 24px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⚠️ SALAH JALAN', 128, 35);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.position.set(0, 4.08, 0);
+  sprite.scale.set(3.2, 0.85, 1);
+  sprite.visible = false;
   return sprite;
 }
 
@@ -182,6 +214,8 @@ export function createKartMesh(
   headGroup?: THREE.Group;
   steerWheel?: THREE.Mesh;
   lookBackTimer?: number;
+  wrongWay?: boolean;
+  wrongWaySprite?: THREE.Sprite;
 } {
   const group = new THREE.Group();
   const char = getKartCharacter(characterId, slot);
@@ -487,6 +521,8 @@ export function createKartMesh(
   if (playerName) {
     group.add(createNameplateSprite(playerName, kartColor));
   }
+  const wrongWaySprite = createWrongWaySprite();
+  group.add(wrongWaySprite);
 
   // 3. Detailed Wheels with Rims (Front steer + All spin)
   const tireGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.42, 14);
@@ -583,6 +619,7 @@ export function createKartMesh(
     driverGroup: driver,
     headGroup,
     steerWheel,
+    wrongWaySprite,
   };
 }
 
@@ -613,6 +650,7 @@ export function stepKartPhysics(
     kart.position.z += fwdZ * kart.speed * dt;
 
     const sample = track.sampleNearestSpline(kart.position.x, kart.position.z);
+    if (kart.wrongWaySprite) kart.wrongWaySprite.visible = false;
     kart.position.y = Math.max(kart.position.y, sample.point.y);
     kart.mesh.position.copy(kart.position);
 
@@ -708,6 +746,20 @@ export function stepKartPhysics(
   kart.position.z += forwardZ * kart.speed * dt;
 
   const sample = track.sampleNearestSpline(kart.position.x, kart.position.z);
+  const dotForward = forwardX * sample.tangent.x + forwardZ * sample.tangent.z;
+  const movingWrongWay =
+    kart.spinoutTimer <= 0 &&
+    !kart.finished &&
+    !kart.eliminated &&
+    ((dotForward < -0.35 && kart.speed > 1.5) || (dotForward > 0.2 && kart.speed < -2.5));
+  kart.wrongWay = movingWrongWay;
+  if (kart.wrongWaySprite) {
+    kart.wrongWaySprite.visible = movingWrongWay;
+    if (movingWrongWay) {
+      const pulse = 1 + Math.sin(performance.now() * 0.012) * 0.08;
+      kart.wrongWaySprite.scale.set(3.2 * pulse, 0.85 * pulse, 1);
+    }
+  }
   const dist = Math.sqrt(sample.distSq);
   if (dist > track.roadHalfWidth - 1.4) {
     const toCenterX = sample.point.x - kart.position.x;

@@ -768,3 +768,88 @@ body,
     transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1) rotate(var(--rot));
   }
 }
+
+/* Kart 1-4P Pre-Start Big Player Name Animation */
+.kart-start-viewport {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.kart-start-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 92%;
+  padding: 16px 28px;
+  border-radius: 20px;
+  background: rgba(8, 12, 23, 0.82);
+  border: 2px solid var(--player-color, #38bdf8);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), 0 0 32px color-mix(in srgb, var(--player-color, #38bdf8) 45%, transparent);
+  text-align: center;
+  backdrop-filter: blur(8px);
+  animation: kart-start-pop 0.65s cubic-bezier(0.22, 1.28, 0.36, 1) forwards,
+    kart-start-pulse 1.2s ease-in-out 0.65s infinite alternate;
+}
+
+.kart-start-viewport.single-player .kart-start-banner {
+  margin-bottom: 190px;
+}
+
+.kart-start-slot {
+  font-size: clamp(12px, 1.4vw, 16px);
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--player-color, #38bdf8);
+}
+
+.kart-start-name {
+  font-size: clamp(24px, 4vw, 56px);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  text-shadow: 0 4px 20px color-mix(in srgb, var(--player-color, #38bdf8) 65%, rgba(0, 0, 0, 0.8));
+  white-space: normal;
+  word-break: break-word;
+}
+
+.kart-start-layer.leaving .kart-start-banner {
+  animation: kart-start-exit 0.45s ease-in forwards;
+}
+
+@keyframes kart-start-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.35) translateY(28px);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes kart-start-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes kart-start-exit {
+  to {
+    opacity: 0;
+    transform: scale(1.22) translateY(-18px);
+  }
+}

@@ -63,6 +63,7 @@ export class KartGame implements PlatformGame {
   private hudEl: HTMLElement | null = null;
   private lapHudEl: HTMLElement | null = null;
   private countdownEl: HTMLElement | null = null;
+  private startLayerEl: HTMLElement | null = null;
   private finishLayerEl: HTMLElement | null = null;
   private resultsEl: HTMLElement | null = null;
   private leaderboardEl: HTMLElement | null = null;
@@ -72,6 +73,12 @@ export class KartGame implements PlatformGame {
   private finishResultsTimeout: number | null = null;
   private frustum = new THREE.Frustum();
   private projScreenMatrix = new THREE.Matrix4();
+  private prevPosMap = new Map<string, THREE.Vector3>();
+  private prevHeadingMap = new Map<string, number>();
+  private tmpDesiredPos = new THREE.Vector3();
+  private tmpDesiredTgt = new THREE.Vector3();
+  private tmpRenderPos = new THREE.Vector3();
+  private lastLeaderboardHtml = '';
 
   mount(container: HTMLElement, sdk: HostSDKContext): void {
     this.container = container;
@@ -97,10 +104,10 @@ export class KartGame implements PlatformGame {
       powerPreference: 'high-performance',
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setScissorTest(true);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -170,21 +177,24 @@ export class KartGame implements PlatformGame {
   private spawnKarts(sdk: HostSDKContext): void {
     if (!this.scene || !this.track) return;
     const players = sdk.getPlayers();
+    const trackLength = Math.max(1, this.track.curve.getLength());
     const startPt = this.track.curve.getPointAt(0);
     const startTan = this.track.curve.getTangentAt(0).normalize();
-    const right = new THREE.Vector3().crossVectors(startTan, new THREE.Vector3(0, 1, 0)).normalize();
     const baseHeading = Math.atan2(startTan.x, startTan.z);
 
     this.cameras = [];
     this.camTargets = [];
 
     players.forEach((p, idx) => {
-      const row = Math.floor(idx / 2);
-      const col = idx % 2 === 0 ? -3.8 : 3.8;
-      const pos = startPt
-        .clone()
-        .addScaledVector(startTan, -4 - row * 5.4)
-        .addScaledVector(right, col);
+      // F1 / Kart staggered 2-column starting grid along the track curve
+      const col = idx % 2 === 0 ? -4.2 : 4.2;
+      const backDist = 5.2 + idx * 3.8;
+      const spawnT = (((1 - backDist / trackLength) % 1) + 1) % 1;
+      const lanePt = this.track!.curve.getPointAt(spawnT);
+      const laneTan = this.track!.curve.getTangentAt(spawnT).normalize();
+      const laneRight = new THREE.Vector3().crossVectors(laneTan, new THREE.Vector3(0, 1, 0)).normalize();
+      const laneHeading = Math.atan2(laneTan.x, laneTan.z);
+      const pos = lanePt.clone().addScaledVector(laneRight, col);
 
       const {
         group,
@@ -197,9 +207,10 @@ export class KartGame implements PlatformGame {
         driverGroup,
         headGroup,
         steerWheel,
+        wrongWaySprite,
       } = createKartMesh(p.color, p.slot, p.characterId, p.name);
       group.position.copy(pos);
-      group.rotation.y = baseHeading;
+      group.rotation.y = laneHeading;
       this.scene!.add(group);
 
       const spawnSample = this.track!.sampleNearestSpline(pos.x, pos.z);
@@ -211,7 +222,7 @@ export class KartGame implements PlatformGame {
         color: p.color,
         isBot: p.isBot,
         position: pos,
-        heading: baseHeading,
+        heading: laneHeading,
         speed: 0,
         verticalVel: 0,
         grounded: true,
@@ -247,12 +258,13 @@ export class KartGame implements PlatformGame {
         driverGroup,
         headGroup,
         steerWheel,
+        wrongWaySprite,
       });
 
       const splitFov = players.length >= 5 ? 76 : 68;
       const cam = new THREE.PerspectiveCamera(splitFov, 1, 0.5, 2400);
-      const backX = Math.sin(baseHeading) * 9.8;
-      const backZ = Math.cos(baseHeading) * 9.8;
+      const backX = Math.sin(laneHeading) * 9.8;
+      const backZ = Math.cos(laneHeading) * 9.8;
       cam.position.set(pos.x - backX, pos.y + 4.8, pos.z - backZ);
       const tgt = new THREE.Vector3(pos.x, pos.y + 1.5, pos.z);
       cam.lookAt(tgt);
@@ -310,6 +322,14 @@ export class KartGame implements PlatformGame {
     container.appendChild(cd);
     this.countdownEl = cd;
 
+    const startLayer = document.createElement('div');
+    startLayer.className = 'kart-start-layer';
+    startLayer.style.cssText =
+      'position:absolute;inset:0;z-index:27;pointer-events:none;overflow:hidden;';
+    container.appendChild(startLayer);
+    this.startLayerEl = startLayer;
+    this.showStartPlayerNames();
+
     const finishLayer = document.createElement('div');
     finishLayer.style.cssText =
       'position:absolute;inset:0;z-index:26;pointer-events:none;overflow:hidden;';
@@ -357,12 +377,22 @@ export class KartGame implements PlatformGame {
 
     const FIXED_DT = 1 / 60;
     while (this.accumulator >= FIXED_DT) {
+      for (const k of this.karts) {
+        let prev = this.prevPosMap.get(k.id);
+        if (!prev) {
+          prev = new THREE.Vector3();
+          this.prevPosMap.set(k.id, prev);
+        }
+        prev.copy(k.position);
+        this.prevHeadingMap.set(k.id, k.heading);
+      }
       this.fixedUpdate(FIXED_DT);
       this.accumulator -= FIXED_DT;
     }
 
+    const renderAlpha = Math.max(0, Math.min(1, this.accumulator / FIXED_DT));
     this.track?.updateVisuals(this.raceTime);
-    this.renderScene();
+    this.renderScene(renderAlpha);
     this.renderMinimap();
     this.rafId = requestAnimationFrame(this.loop);
   };
@@ -397,6 +427,7 @@ export class KartGame implements PlatformGame {
         } else {
           this.countdownEl.textContent = 'GO!';
           this.countdownEl.style.color = '#00e5ff';
+          this.startLayerEl?.classList.add('leaving');
           if (this.lastCountdownBeep > 0) {
             this.lastCountdownBeep = 0;
             this.audio.playTone(880, 0.28, 'triangle', 0.18);
@@ -406,6 +437,10 @@ export class KartGame implements PlatformGame {
       if (this.countdownTimer <= 0) {
         this.racePhase = 'racing';
         if (this.countdownEl) this.countdownEl.textContent = '';
+        if (this.startLayerEl) {
+          this.startLayerEl.innerHTML = '';
+          this.startLayerEl.classList.remove('leaving');
+        }
         this.sdk.sendVibrate('*', [60]);
       }
       return;
@@ -742,6 +777,50 @@ export class KartGame implements PlatformGame {
     return humans.length > 0 ? humans : this.karts;
   }
 
+  private showStartPlayerNames(): void {
+    if (!this.startLayerEl) return;
+    this.startLayerEl.innerHTML = '';
+    this.startLayerEl.classList.remove('leaving');
+
+    const targets = this.getSplitTargets();
+    // Only show big player name intro for 1-4 players (skip for 5-10 players)
+    if (targets.length < 1 || targets.length > 4) return;
+
+    const count = targets.length;
+    const cols = count === 1 ? 1 : 2;
+    const rows = Math.ceil(count / cols);
+
+    targets.forEach((kart, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+
+      const cell = document.createElement('div');
+      cell.className = `kart-start-viewport${count === 1 ? ' single-player' : ''}`;
+      cell.style.left = `${(col / cols) * 100}%`;
+      cell.style.top = `${(row / rows) * 100}%`;
+      cell.style.width = `${100 / cols}%`;
+      cell.style.height = `${100 / rows}%`;
+      cell.style.setProperty('--player-color', kart.color);
+
+      const banner = document.createElement('div');
+      banner.className = 'kart-start-banner';
+      banner.style.animationDelay = `${index * 0.08}s, ${0.65 + index * 0.08}s`;
+
+      const slotEl = document.createElement('div');
+      slotEl.className = 'kart-start-slot';
+      slotEl.textContent = `PLAYER ${kart.slot + 1}`;
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'kart-start-name';
+      nameEl.textContent = kart.name;
+
+      banner.appendChild(slotEl);
+      banner.appendChild(nameEl);
+      cell.appendChild(banner);
+      this.startLayerEl?.appendChild(cell);
+    });
+  }
+
   private showViewportFinishAnimation(kart: KartState, index: number, totalViewports: number): void {
     if (!this.finishLayerEl) return;
     const count = totalViewports;
@@ -947,7 +1026,10 @@ export class KartGame implements PlatformGame {
       </div>`;
       })
       .join('');
-    this.leaderboardEl.innerHTML = rows;
+    if (rows !== this.lastLeaderboardHtml) {
+      this.lastLeaderboardHtml = rows;
+      this.leaderboardEl.innerHTML = rows;
+    }
   }
 
   private updateOffCameraWarnings(useSplit: boolean): void {
@@ -967,10 +1049,29 @@ export class KartGame implements PlatformGame {
       .join('');
   }
 
-  private renderScene(): void {
+  private renderScene(alpha = 1): void {
     if (!this.renderer || !this.scene || this.karts.length === 0) return;
     const w = this.renderer.domElement.clientWidth;
     const h = this.renderer.domElement.clientHeight;
+
+    // Interpolate kart visual transforms between previous and current physics states
+    if (this.racePhase === 'racing' || this.racePhase === 'celebrating') {
+      for (const k of this.karts) {
+        if (k.eliminated) continue;
+        const prevPos = this.prevPosMap.get(k.id);
+        const prevHead = this.prevHeadingMap.get(k.id);
+        if (prevPos) {
+          this.tmpRenderPos.lerpVectors(prevPos, k.position, alpha);
+          k.mesh.position.copy(this.tmpRenderPos);
+        }
+        if (prevHead !== undefined) {
+          let diff = k.heading - prevHead;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          k.mesh.rotation.y = prevHead + diff * alpha;
+        }
+      }
+    }
 
     const splitTargets = this.getSplitTargets();
     const useSplit = this.forceSplitScreen || splitTargets.length <= 4;
@@ -1002,19 +1103,17 @@ export class KartGame implements PlatformGame {
         const vx = col * cellW;
         const vy = h - (row + 1) * cellH;
 
+        const kp = k.mesh.position;
+        const kh = k.mesh.rotation.y;
         const camDist = count >= 5 ? 11.8 : 9.8;
         const camHeight = count >= 5 ? 5.8 : 4.8;
-        const backX = Math.sin(k.heading) * camDist;
-        const backZ = Math.cos(k.heading) * camDist;
-        const desiredPos = new THREE.Vector3(
-          k.position.x - backX,
-          k.position.y + camHeight,
-          k.position.z - backZ
-        );
-        const desiredTgt = new THREE.Vector3(k.position.x, k.position.y + 1.5, k.position.z);
+        const backX = Math.sin(kh) * camDist;
+        const backZ = Math.cos(kh) * camDist;
+        this.tmpDesiredPos.set(kp.x - backX, kp.y + camHeight, kp.z - backZ);
+        this.tmpDesiredTgt.set(kp.x, kp.y + 1.5, kp.z);
 
-        cam.position.lerp(desiredPos, camLerp);
-        tgt.lerp(desiredTgt, camLerp);
+        cam.position.lerp(this.tmpDesiredPos, camLerp);
+        tgt.lerp(this.tmpDesiredTgt, camLerp);
         cam.lookAt(tgt);
         cam.aspect = cellW / cellH;
         cam.updateProjectionMatrix();
@@ -1028,26 +1127,20 @@ export class KartGame implements PlatformGame {
         this.karts.find((k) => !k.eliminated && k.rank === 1) ??
         this.karts.find((k) => !k.eliminated) ??
         this.karts[0];
+      const lp = leader.mesh.position;
+      const lh = leader.mesh.rotation.y;
       const extraPlayers = Math.max(0, this.karts.length - 5);
       const stadiumBack = 42 + extraPlayers * 2.5;
       const stadiumHeight = 30 + extraPlayers * 1.8;
-      const backX = Math.sin(leader.heading) * stadiumBack;
-      const backZ = Math.cos(leader.heading) * stadiumBack;
-      const fwdX = Math.sin(leader.heading) * 8;
-      const fwdZ = Math.cos(leader.heading) * 8;
-      const desiredPos = new THREE.Vector3(
-        leader.position.x - backX,
-        leader.position.y + stadiumHeight,
-        leader.position.z - backZ
-      );
-      const desiredTgt = new THREE.Vector3(
-        leader.position.x + fwdX,
-        leader.position.y + 1.5,
-        leader.position.z + fwdZ
-      );
+      const backX = Math.sin(lh) * stadiumBack;
+      const backZ = Math.cos(lh) * stadiumBack;
+      const fwdX = Math.sin(lh) * 8;
+      const fwdZ = Math.cos(lh) * 8;
+      this.tmpDesiredPos.set(lp.x - backX, lp.y + stadiumHeight, lp.z - backZ);
+      this.tmpDesiredTgt.set(lp.x + fwdX, lp.y + 1.5, lp.z + fwdZ);
 
-      this.stadiumCam.position.lerp(desiredPos, 1 - Math.exp(-8 * this.frameDt));
-      this.stadiumTarget.lerp(desiredTgt, 1 - Math.exp(-10 * this.frameDt));
+      this.stadiumCam.position.lerp(this.tmpDesiredPos, 1 - Math.exp(-8 * this.frameDt));
+      this.stadiumTarget.lerp(this.tmpDesiredTgt, 1 - Math.exp(-10 * this.frameDt));
       this.stadiumCam.lookAt(this.stadiumTarget);
       this.stadiumCam.aspect = w / h;
       this.stadiumCam.updateProjectionMatrix();

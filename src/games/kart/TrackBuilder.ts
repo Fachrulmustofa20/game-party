@@ -521,8 +521,92 @@ export class TrackBuilder {
     );
     banner.position.set(0, 11.2, 0);
     banner.castShadow = true;
-    archGroup.add(leftPillar, rightPillar, banner);
+
+    // Checkered Start/Finish Line painted on the road surface
+    const lineCanvas = document.createElement('canvas');
+    lineCanvas.width = 512;
+    lineCanvas.height = 96;
+    const lctx = lineCanvas.getContext('2d')!;
+    const cols = 16;
+    const rows = 3;
+    const cellW = lineCanvas.width / cols;
+    const cellH = lineCanvas.height / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        lctx.fillStyle = (r + c) % 2 === 0 ? '#0f172a' : '#ffffff';
+        lctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+      }
+    }
+    const lineTex = new THREE.CanvasTexture(lineCanvas);
+    lineTex.colorSpace = THREE.SRGBColorSpace;
+    lineTex.anisotropy = 4;
+
+    const startLine = new THREE.Mesh(
+      new THREE.PlaneGeometry(this.roadHalfWidth * 2 - 0.6, 4.2),
+      new THREE.MeshStandardMaterial({
+        map: lineTex,
+        roughness: 0.5,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      })
+    );
+    startLine.rotation.x = -Math.PI / 2;
+    startLine.position.set(0, 0.08, 0);
+    startLine.receiveShadow = true;
+
+    // Bright accent border strips on front & back of the start line
+    const edgeMat = new THREE.MeshBasicMaterial({ color: '#facc15' });
+    const edgeGeo = new THREE.PlaneGeometry(this.roadHalfWidth * 2 - 0.6, 0.28);
+    const frontEdge = new THREE.Mesh(edgeGeo, edgeMat);
+    frontEdge.rotation.x = -Math.PI / 2;
+    frontEdge.position.set(0, 0.09, 2.15);
+    const backEdge = new THREE.Mesh(edgeGeo, edgeMat);
+    backEdge.rotation.x = -Math.PI / 2;
+    backEdge.position.set(0, 0.09, -2.15);
+
+    archGroup.add(leftPillar, rightPillar, banner, startLine, frontEdge, backEdge);
     scene.add(archGroup);
+
+    // F1-style staggered starting grid boxes on the road behind the start line
+    const trackLen = Math.max(1, this.curve.getLength());
+    const gridMat = new THREE.MeshBasicMaterial({
+      color: '#f8fafc',
+      transparent: true,
+      opacity: 0.85,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+    });
+    const frontBarGeo = new THREE.PlaneGeometry(3.2, 0.24);
+    const sideBarGeo = new THREE.PlaneGeometry(0.24, 1.8);
+
+    for (let idx = 0; idx < 10; idx++) {
+      const col = idx % 2 === 0 ? -4.2 : 4.2;
+      const backDist = 5.2 + idx * 3.8;
+      const t = (((1 - backDist / trackLen) % 1) + 1) % 1;
+      const pt = this.curve.getPointAt(t);
+      const tan = this.curve.getTangentAt(t).normalize();
+      const right = new THREE.Vector3().crossVectors(tan, new THREE.Vector3(0, 1, 0)).normalize();
+
+      const boxGroup = new THREE.Group();
+      boxGroup.position.copy(pt).addScaledVector(right, col);
+      boxGroup.position.y += 0.07;
+      boxGroup.lookAt(boxGroup.position.clone().add(tan));
+
+      const frontBar = new THREE.Mesh(frontBarGeo, gridMat);
+      frontBar.rotation.x = -Math.PI / 2;
+      frontBar.position.set(0, 0, 1.85);
+
+      const leftBar = new THREE.Mesh(sideBarGeo, gridMat);
+      leftBar.rotation.x = -Math.PI / 2;
+      leftBar.position.set(-1.48, 0, 0.95);
+
+      const rightBar = new THREE.Mesh(sideBarGeo, gridMat);
+      rightBar.rotation.x = -Math.PI / 2;
+      rightBar.position.set(1.48, 0, 0.95);
+
+      boxGroup.add(frontBar, leftBar, rightBar);
+      scene.add(boxGroup);
+    }
   }
 
   private buildTrackGuardrailsAndTunnel(scene: THREE.Scene): void {
@@ -1234,18 +1318,22 @@ export class TrackBuilder {
     if (this.mapId === 'ice-peak') {
       const trunkGeo = new THREE.CylinderGeometry(0.45, 0.75, 5, 7);
       const trunkMat = new THREE.MeshStandardMaterial({ color: '#451a03', roughness: 0.9 });
-      const pineGeo = new THREE.ConeGeometry(3.4, 9.5, 7);
+      const pineLowerGeo = new THREE.ConeGeometry(4.5, 7.2, 7);
+      const pineGeo = new THREE.ConeGeometry(3.5, 8.8, 7);
       const pineMat = new THREE.MeshStandardMaterial({ color: '#0f766e', roughness: 0.75 });
-      const snowGeo = new THREE.ConeGeometry(2.1, 4.2, 7);
+      const snowGeo = new THREE.ConeGeometry(2.2, 4.2, 7);
       const snowMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.6 });
       const count = 90;
       const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
+      const pinesLower = new THREE.InstancedMesh(pineLowerGeo, pineMat, count);
       const pines = new THREE.InstancedMesh(pineGeo, pineMat, count);
       const snows = new THREE.InstancedMesh(snowGeo, snowMat, count);
       trunks.castShadow = true;
+      pinesLower.castShadow = true;
       pines.castShadow = true;
       snows.castShadow = true;
       trunks.receiveShadow = true;
+      pinesLower.receiveShadow = true;
       pines.receiveShadow = true;
       snows.receiveShadow = true;
       const dummy = new THREE.Object3D();
@@ -1260,18 +1348,22 @@ export class TrackBuilder {
         dummy.scale.setScalar(s);
         dummy.updateMatrix();
         trunks.setMatrixAt(placed, dummy.matrix);
-        dummy.position.set(x, 7.2 * s, z);
+        dummy.position.set(x, 5.1 * s, z);
+        dummy.updateMatrix();
+        pinesLower.setMatrixAt(placed, dummy.matrix);
+        dummy.position.set(x, 8.2 * s, z);
         dummy.updateMatrix();
         pines.setMatrixAt(placed, dummy.matrix);
-        dummy.position.set(x, 10.2 * s, z);
+        dummy.position.set(x, 10.9 * s, z);
         dummy.updateMatrix();
         snows.setMatrixAt(placed, dummy.matrix);
         placed++;
       }
       trunks.count = placed;
+      pinesLower.count = placed;
       pines.count = placed;
       snows.count = placed;
-      scene.add(trunks, pines, snows);
+      scene.add(trunks, pinesLower, pines, snows);
       return;
     }
 
@@ -1326,15 +1418,15 @@ export class TrackBuilder {
     const trunkGeo = new THREE.TubeGeometry(trunkCurve, 10, 0.55, 8, false);
     const trunkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.9 });
 
-    const frondGeo = new THREE.PlaneGeometry(3.8, 7.6, 2, 5);
+    const frondGeo = new THREE.PlaneGeometry(4.6, 8.6, 2, 5);
     frondGeo.rotateX(Math.PI / 2);
-    frondGeo.translate(0, 0, 3.6);
+    frondGeo.translate(0, 0, 4.1);
     // Curve the frond tip downward and give it a V-fold for 3D volume
     const fPos = frondGeo.attributes.position;
     for (let i = 0; i < fPos.count; i++) {
       const x = fPos.getX(i);
       const z = fPos.getZ(i);
-      fPos.setY(i, fPos.getY(i) - z * z * 0.04 - Math.abs(x) * 0.22);
+      fPos.setY(i, fPos.getY(i) - z * z * 0.036 - Math.abs(x) * 0.2);
     }
     frondGeo.computeVertexNormals();
 
@@ -1345,21 +1437,16 @@ export class TrackBuilder {
       roughness: 0.5,
     });
 
-    const crownCoreGeo = new THREE.DodecahedronGeometry(1.65, 1);
-    const crownCoreMat = new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.65 });
-
     const coconutGeo = new THREE.SphereGeometry(0.45, 8, 8);
     const coconutMat = new THREE.MeshStandardMaterial({ color: '#451a03', roughness: 0.8 });
 
     const count = 95;
-    const frondsPerTree = 12;
+    const frondsPerTree = 21;
     const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
     const fronds = new THREE.InstancedMesh(frondGeo, frondMat, count * frondsPerTree);
-    const crownCores = new THREE.InstancedMesh(crownCoreGeo, crownCoreMat, count);
     const coconuts = new THREE.InstancedMesh(coconutGeo, coconutMat, count * 3);
     trunks.castShadow = true;
     fronds.castShadow = true;
-    crownCores.castShadow = true;
 
     const dummy = new THREE.Object3D();
     dummy.rotation.order = 'YXZ';
@@ -1393,12 +1480,6 @@ export class TrackBuilder {
       const cy = crownLocal.y - 0.2;
       const cz = z + crownLocal.z;
 
-      dummy.position.set(cx, cy + 0.15 * scale, cz);
-      dummy.rotation.set(0, yaw, 0);
-      dummy.scale.set(1.25 * scale, 0.65 * scale, 1.25 * scale);
-      dummy.updateMatrix();
-      crownCores.setMatrixAt(placed, dummy.matrix);
-
       for (let c = 0; c < 3; c++) {
         const ang = (c / 3) * Math.PI * 2 + yaw;
         dummy.position.set(cx + Math.cos(ang) * 0.45, cy - 0.45, cz + Math.sin(ang) * 0.45);
@@ -1409,13 +1490,15 @@ export class TrackBuilder {
       }
 
       for (let f = 0; f < frondsPerTree; f++) {
-        const isUpper = f < 6;
-        const ringIdx = f % 6;
-        const fYaw = yaw + (ringIdx / 6) * Math.PI * 2 + (isUpper ? 0.25 : 0);
-        const pitch = isUpper ? -0.25 : 0.12;
-        dummy.position.set(cx, cy + (isUpper ? 0.35 * scale : 0), cz);
+        const tier = Math.floor(f / 7); // 0 = upper, 1 = mid, 2 = lower drooping shade
+        const ringIdx = f % 7;
+        const fYaw = yaw + (ringIdx / 7) * Math.PI * 2 + tier * 0.3;
+        const pitch = tier === 0 ? -0.32 : tier === 1 ? 0.04 : 0.32;
+        const yOff = tier === 0 ? 0.45 * scale : tier === 1 ? 0.1 * scale : -0.25 * scale;
+        const fScale = tier === 0 ? 0.82 : tier === 1 ? 1.05 : 1.18;
+        dummy.position.set(cx, cy + yOff, cz);
         dummy.rotation.set(pitch, fYaw, 0);
-        dummy.scale.setScalar(scale * (isUpper ? 0.85 : 1.05));
+        dummy.scale.setScalar(scale * fScale);
         dummy.updateMatrix();
         fronds.setMatrixAt(frondIdx++, dummy.matrix);
       }
@@ -1423,9 +1506,8 @@ export class TrackBuilder {
     }
     trunks.count = placed;
     fronds.count = frondIdx;
-    crownCores.count = placed;
     coconuts.count = cocoIdx;
-    scene.add(trunks, fronds, crownCores, coconuts);
+    scene.add(trunks, fronds, coconuts);
   }
 
   private buildBoostPads(scene: THREE.Scene): void {

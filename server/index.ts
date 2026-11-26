@@ -228,7 +228,7 @@ wss.on('connection', (ws) => {
       }
 
       const sessionToken = String(msg.sessionToken || '');
-      const name = String(msg.name || 'Player').slice(0, 14);
+      const name = String(msg.name || 'Player').trim().slice(0, 32) || 'Player';
       const color = String(msg.color || '#FF4D4D');
       const characterId = typeof msg.characterId === 'string' && msg.characterId ? msg.characterId.slice(0, 24) : '';
 

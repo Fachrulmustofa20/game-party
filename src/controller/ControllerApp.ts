@@ -173,7 +173,7 @@ export class ControllerApp {
           <label style="font-size:12px;color:var(--muted);">Kode Room</label>
           <input id="inp-room" class="ctrl-input" maxlength="6" placeholder="ABCD" value="${this.initialRoom.toUpperCase()}" style="text-transform:uppercase;letter-spacing:0.15em;" />
           <label style="font-size:12px;color:var(--muted);">Nama Pemain</label>
-          <input id="inp-name" class="ctrl-input" maxlength="12" placeholder="Pembalap" value="Player" />
+          <input id="inp-name" class="ctrl-input" maxlength="32" placeholder="Pembalap" value="Player" />
           <label style="font-size:12px;color:var(--muted);">Pilih Mobil</label>
           <div class="character-picker-grid" id="character-row"></div>
           <label style="font-size:12px;color:var(--muted);">Pilih Warna Kart</label>
