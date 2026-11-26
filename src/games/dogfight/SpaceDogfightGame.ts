@@ -377,6 +377,41 @@ export class SpaceDogfightGame implements PlatformGame {
     return { group, shield, flameLeft, flameRight };
   }
 
+  private createShipNameplateSprite(name: string, accentColor: string): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.fillStyle = 'rgba(8, 12, 23, 0.85)';
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(6, 10, 244, 44, 22);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(28, 32, 8, 0, Math.PI * 2);
+    ctx.fillStyle = accentColor;
+    ctx.fill();
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '800 22px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, 44, 33, 198);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.set(0, 4.8, 0);
+    sprite.scale.set(7.6, 1.9, 1);
+    sprite.renderOrder = 10;
+    return sprite;
+  }
+
   private getSpawnPoints(count: number): Array<{ x: number; z: number; angle: number }> {
     const total = Math.max(2, count);
     const rx = ARENA_HALF_W * 0.72;
@@ -399,6 +434,9 @@ export class SpaceDogfightGame implements PlatformGame {
       const charSpec = getSpaceCharacter(p.characterId, p.slot);
       const color = p.isBot ? charSpec.color : p.color || charSpec.color;
       const { group, shield, flameLeft, flameRight } = this.createShipMesh(color, charSpec.accent);
+      if (players.length >= 5) {
+        group.add(this.createShipNameplateSprite(p.name, color));
+      }
       group.position.set(sp.x, 0, sp.z);
       group.rotation.y = -sp.angle;
       scene.add(group);

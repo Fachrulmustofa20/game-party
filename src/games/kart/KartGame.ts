@@ -211,7 +211,13 @@ export class KartGame implements PlatformGame {
         headGroup,
         steerWheel,
         wrongWaySprite,
+        nameplateSprite,
       } = createKartMesh(p.color, p.slot, p.characterId, p.name);
+      if (nameplateSprite && players.length >= 5) {
+        nameplateSprite.position.set(0, 5.4, 0);
+        nameplateSprite.scale.set(6.4, 1.6, 1);
+        nameplateSprite.renderOrder = 10;
+      }
       group.position.copy(pos);
       group.rotation.y = laneHeading;
       this.scene!.add(group);
