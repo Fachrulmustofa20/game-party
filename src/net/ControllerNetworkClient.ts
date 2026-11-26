@@ -242,10 +242,18 @@ export class ControllerNetworkClient {
   }
 
   destroy(): void {
-    if (this.fallbackTimer !== null) clearTimeout(this.fallbackTimer);
+    if (this.fallbackTimer !== null) {
+      clearTimeout(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
     this.fastChannel?.close();
     this.reliableChannel?.close();
     this.pc?.close();
     this.ws?.close();
+    this.fastChannel = null;
+    this.reliableChannel = null;
+    this.pc = null;
+    this.ws = null;
+    this.transport = 'connecting';
   }
 }

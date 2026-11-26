@@ -175,6 +175,12 @@ export class HostNetworkManager {
     }
   }
 
+  syncSelectedGame(gameId: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'sync_selected_game', gameId }));
+    }
+  }
+
   private sendReliableToOne(playerId: string, json: string, payload: Record<string, unknown>): void {
     const peer = this.peers.get(playerId);
     if (peer?.reliableChannel && peer.reliableChannel.readyState === 'open') {

@@ -704,6 +704,50 @@ body,
   border-radius: 14px;
 }
 
+.dpad-4way-grid {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1.05fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  touch-action: none;
+}
+
+.arr-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.arr-left {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.arr-right {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.arr-down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.arr-down.pressed {
+  background: linear-gradient(180deg, #ef4444, #991b1b);
+  border-color: rgba(252, 165, 165, 0.85);
+}
+
+.abcd-letter {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
 .analog-mode-switch {
   width: 100%;
   min-block-size: 32px;

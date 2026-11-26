@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { HostSDKContext, PlatformGame, PlatformPlayer } from '../../sdk/GameSDK';
+import { getSpaceCharacter } from '../../sdk/SpaceCharacters';
+import { SpaceAudioEngine } from './SpaceAudioEngine';
 
 const ARENA_HALF_W = 86;
 const ARENA_HALF_H = 52;
@@ -148,10 +150,17 @@ export class SpaceDogfightGame implements PlatformGame {
   private hudEl: HTMLElement | null = null;
   private countdownEl: HTMLElement | null = null;
   private overlayEl: HTMLElement | null = null;
+  private audio = new SpaceAudioEngine();
+  private unlockAudioOnce = (): void => {
+    this.audio.unlock();
+  };
 
   mount(container: HTMLElement, sdk: HostSDKContext): void {
     this.container = container;
     this.sdk = sdk;
+    this.audio.unlock();
+    window.addEventListener('pointerdown', this.unlockAudioOnce, { once: true });
+    window.addEventListener('keydown', this.unlockAudioOnce, { once: true });
     this.ships = [];
     this.projectiles = [];
     this.asteroids = [];
@@ -199,6 +208,9 @@ export class SpaceDogfightGame implements PlatformGame {
       this.rafId = null;
     }
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('pointerdown', this.unlockAudioOnce);
+    window.removeEventListener('keydown', this.unlockAudioOnce);
+    this.audio.destroy();
     this.renderer?.dispose();
     this.renderer = null;
     this.scene = null;
@@ -291,7 +303,7 @@ export class SpaceDogfightGame implements PlatformGame {
     }
   }
 
-  private createShipMesh(color: string): {
+  private createShipMesh(color: string, accentColor = '#38bdf8'): {
     group: THREE.Group;
     shield: THREE.Mesh;
     flameLeft: THREE.Mesh;
@@ -307,8 +319,8 @@ export class SpaceDogfightGame implements PlatformGame {
     });
     const darkMat = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.7, roughness: 0.3 });
     const cockpitMat = new THREE.MeshStandardMaterial({
-      color: '#bae6fd',
-      emissive: '#38bdf8',
+      color: accentColor,
+      emissive: accentColor,
       emissiveIntensity: 0.5,
       roughness: 0.1,
     });
@@ -374,8 +386,9 @@ export class SpaceDogfightGame implements PlatformGame {
 
     players.forEach((p, idx) => {
       const sp = spawns[idx] ?? spawns[0];
-      const color = p.color || sp.defaultColor;
-      const { group, shield, flameLeft, flameRight } = this.createShipMesh(color);
+      const charSpec = getSpaceCharacter(p.characterId, p.slot);
+      const color = p.isBot ? charSpec.color : p.color || charSpec.color || sp.defaultColor;
+      const { group, shield, flameLeft, flameRight } = this.createShipMesh(color, charSpec.accent);
       group.position.set(sp.x, 0, sp.z);
       group.rotation.y = -sp.angle;
       scene.add(group);
@@ -512,13 +525,15 @@ export class SpaceDogfightGame implements PlatformGame {
     };
 
     if (s1) {
-      (this.hudEl.querySelector('#df-p1-name') as HTMLElement).textContent = `P1 ${s1.player.name}`;
+      const c1 = getSpaceCharacter(s1.player.characterId, s1.player.slot);
+      (this.hudEl.querySelector('#df-p1-name') as HTMLElement).textContent = `P1 ${s1.player.name} (${c1.name})`;
       (this.hudEl.querySelector('#df-p1-score') as HTMLElement).textContent = renderStars(s1.score);
       (this.hudEl.querySelector('#df-p1-hp') as HTMLElement).style.width = `${Math.max(0, s1.hp)}%`;
       (this.hudEl.querySelector('#df-p1-pu') as HTMLElement).textContent = puText(s1);
     }
     if (s2) {
-      (this.hudEl.querySelector('#df-p2-name') as HTMLElement).textContent = `${s2.player.name} P2`;
+      const c2 = getSpaceCharacter(s2.player.characterId, s2.player.slot);
+      (this.hudEl.querySelector('#df-p2-name') as HTMLElement).textContent = `${s2.player.name} (${c2.name}) P2`;
       (this.hudEl.querySelector('#df-p2-score') as HTMLElement).textContent = renderStars(s2.score);
       (this.hudEl.querySelector('#df-p2-hp') as HTMLElement).style.width = `${Math.max(0, s2.hp)}%`;
       (this.hudEl.querySelector('#df-p2-pu') as HTMLElement).textContent = puText(s2);
@@ -674,14 +689,19 @@ export class SpaceDogfightGame implements PlatformGame {
         const sideDir = input.steer >= 0 ? 1 : -1;
         ship.vx += -Math.sin(ship.angle) * sideDir * 34;
         ship.vz += Math.cos(ship.angle) * sideDir * 34;
+        this.audio.playDodge();
         this.sdk?.sendVibrate(ship.player.id, 25);
       }
 
-      // Thrust
-      const accel = ship.boostTimer > 0 ? 96 : input.gas ? 56 : 12;
+      // Thrust & Reverse Brake
+      const accel = ship.boostTimer > 0 ? 96 : input.gas ? 56 : input.brake ? 24 : 12;
+      this.audio.updateShipThruster(ship.player.id, ship.player.slot, input.gas, ship.boostTimer > 0);
       if (input.gas || ship.boostTimer > 0) {
         ship.vx += Math.cos(ship.angle) * accel * dt;
         ship.vz += Math.sin(ship.angle) * accel * dt;
+      } else if (input.brake) {
+        ship.vx -= Math.cos(ship.angle) * accel * dt;
+        ship.vz -= Math.sin(ship.angle) * accel * dt;
       }
 
       // Space drag
@@ -737,6 +757,7 @@ export class SpaceDogfightGame implements PlatformGame {
           ship.powerUpTimer = 9;
           this.scene?.remove(orb.mesh);
           this.powerUps.splice(i, 1);
+          this.audio.playPowerUp();
           this.sdk?.sendVibrate(ship.player.id, [20, 30, 20]);
         }
       }
@@ -803,7 +824,10 @@ export class SpaceDogfightGame implements PlatformGame {
               this.sdk?.sendVibrate(ship.player.id, [45, 20, 45]);
 
               if (ship.hp <= 0) {
+                this.audio.playExplosion();
                 this.handleShipDestroyed(ship, pr.ownerId);
+              } else {
+                this.audio.playHit();
               }
             } else {
               this.spawnExplosion(pr.x, pr.z, '#38bdf8', 4);
@@ -828,6 +852,11 @@ export class SpaceDogfightGame implements PlatformGame {
     const isTriple = ship.powerUp === 'triple';
     const isMissile = ship.powerUp === 'missile';
     ship.fireCooldown = isMissile ? 0.45 : 0.22;
+    if (isMissile) {
+      this.audio.playMissile();
+    } else {
+      this.audio.playLaser();
+    }
 
     const angles = isTriple ? [ship.angle - 0.16, ship.angle, ship.angle + 0.16] : [ship.angle];
     const speed = isMissile ? 68 : 96;
