@@ -99,7 +99,7 @@ export class LiarsDiceGame implements PlatformGame {
   readonly id = 'liars-dice';
   readonly title = "Liar's Dice";
   readonly subtitle =
-    'Bid jumlah mata dadu, bluff lawan, dan tantang sebelum kehabisan dadu. Arena sosial 2-10 pemain.';
+    'Tebak dan naikkan jumlah mata dadu di meja, gertak lawanmu, dan tantang jika kamu yakin lawan sedang berbohong agar dadunya berkurang!';
   readonly badge = '2-10 PLAYER • BLUFF';
   readonly accentColor = '#f59e0b';
   readonly coverImage = COVER_SVG;

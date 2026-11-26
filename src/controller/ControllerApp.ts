@@ -200,12 +200,12 @@ export class ControllerApp {
       <div class="ctrl-landscape-guard" id="landscape-guard" role="dialog" aria-modal="true" aria-labelledby="landscape-guard-title">
         <div class="landscape-guard-card">
           <div class="rotate-phone-icon" aria-hidden="true">📱</div>
-          <h2 id="landscape-guard-title" style="margin:0;font-size:20px;font-weight:900;">Wajib Mode Landscape</h2>
+          <h2 id="landscape-guard-title" style="margin:0;font-size:20px;font-weight:900;">Putar Layar ke Landscape</h2>
           <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5;">
-            Controller hanya bisa digunakan dalam posisi layar mendatar (landscape). Putar HP Anda sekarang.
+            Biar kontroler nyaman dipakai, putar HP ke posisi mendatar ya.
           </p>
           <button id="btn-force-landscape" class="btn btn-primary" style="width:100%;">
-            Putar ke Landscape (Fullscreen)
+            Aktifkan Layar Penuh
           </button>
         </div>
       </div>
@@ -239,7 +239,7 @@ export class ControllerApp {
             <span class="brand-badge">Gabung Room</span>
           </div>
           <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.45;">
-            Masukkan <strong>Kode Room</strong> &amp; <strong>Nama Pemain</strong> lalu klik <strong>Gabung</strong>. Setelah masuk, Anda bisa memilih karakter dan klik <strong>Ready</strong>.
+            Masukkan <strong>Kode Room</strong> dari layar PC dan namamu, lalu tekan <strong>Gabung</strong>.
           </p>
           <label for="inp-room" style="font-size:12px;color:var(--muted);">Kode Room</label>
           <input id="inp-room" class="ctrl-input" maxlength="6" placeholder="ABCD" value="${prefillRoom}" style="text-transform:uppercase;letter-spacing:0.15em;" />
@@ -350,7 +350,7 @@ export class ControllerApp {
               <span class="brand-badge">${isSerpent ? 'Pilih Warna' : 'Pilih Karakter'}</span>
             </div>
             <span id="lobby-ready-pill" class="ready-summary-pill ${this.isReady ? 'ready' : 'waiting'}">
-              ${this.isReady ? 'SIAP' : 'BELUM READY'}
+              ${this.isReady ? 'Sudah Siap' : 'Belum Siap'}
             </span>
           </div>
 
@@ -362,12 +362,12 @@ export class ControllerApp {
                 <div class="lobby-room-sub">Room <strong>${activeRoom}</strong></div>
               </div>
             </div>
-            <button id="btn-edit-join" type="button" class="btn-edit-pill" title="Ubah Kode Room atau Nama Pemain">
+            <button id="btn-edit-join" type="button" class="btn-edit-pill" title="Ganti Kode Room atau Nama Pemain">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 20h9"/>
                 <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"/>
               </svg>
-              <span>Ubah Room / Nama</span>
+              <span>Ganti Room / Nama</span>
             </button>
           </div>
 
@@ -390,13 +390,13 @@ export class ControllerApp {
 
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
             <button id="btn-ready" type="button" class="btn ${this.isReady ? 'btn-ready-active' : 'btn-primary'}" style="padding:14px;font-size:16px;">
-              ${this.isReady ? 'Batalkan' : 'READY'}
+              ${this.isReady ? 'Batal Siap' : 'Saya Siap!'}
             </button>
             <div id="ready-hint" style="font-size:12px;color:var(--muted);text-align:center;">
               ${
                 this.isReady
-                  ? 'Menunggu semua pemain lain klik READY & Host memulai game...'
-                  : 'Pilih karakter Anda, lalu klik READY untuk memulai game.'
+                  ? 'Sip! Tunggu pemain lain siap dan host memulai gamenya ya...'
+                  : 'Pilih karaktermu dulu, lalu tekan Saya Siap!'
               }
             </div>
           </div>
@@ -574,16 +574,16 @@ export class ControllerApp {
       this.client.setReady(this.isReady);
       if (readyBtn) {
         readyBtn.className = `btn ${this.isReady ? 'btn-ready-active' : 'btn-primary'}`;
-        readyBtn.textContent = this.isReady ? 'Batalkan' : 'READY';
+        readyBtn.textContent = this.isReady ? 'Batal Siap' : 'Saya Siap!';
       }
       if (readyPill) {
         readyPill.className = `ready-summary-pill ${this.isReady ? 'ready' : 'waiting'}`;
-        readyPill.textContent = this.isReady ? 'SIAP' : 'BELUM READY';
+        readyPill.textContent = this.isReady ? 'Sudah Siap' : 'Belum Siap';
       }
       if (readyHint) {
         readyHint.textContent = this.isReady
-          ? 'Menunggu semua pemain lain klik READY & Host memulai game...'
-          : 'Pilih karakter Anda, lalu klik READY untuk memulai game.';
+          ? 'Sip! Tunggu pemain lain siap dan host memulai gamenya ya...'
+          : 'Pilih karaktermu dulu, lalu tekan Saya Siap!';
       }
       renderCars();
     });
