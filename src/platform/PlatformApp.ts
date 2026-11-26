@@ -7,6 +7,7 @@ import { KART_CHARACTERS, getKartCharacter } from '../sdk/KartCharacters';
 import { SPACE_CHARACTERS, getSpaceCharacter } from '../sdk/SpaceCharacters';
 import { KartGame } from '../games/kart/KartGame';
 import { SpaceDogfightGame } from '../games/dogfight/SpaceDogfightGame';
+import { PacGame } from '../games/pacman/PacGame';
 
 const ROOM_STORAGE_KEY = 'nitro_host_room_code';
 const DONATION_URL = 'https://saweria.co/fachrulmustofa';
@@ -35,7 +36,7 @@ export class PlatformApp {
   private bots: PlatformPlayer[] = [];
   private botLevel: BotLevel = 'medium';
   private activeGame: PlatformGame | null = null;
-  private games: PlatformGame[] = [new KartGame(), new SpaceDogfightGame()];
+  private games: PlatformGame[] = [new KartGame(), new SpaceDogfightGame(), new PacGame()];
   private selectedGame: PlatformGame = this.games[0];
 
   private qrCanvas: HTMLCanvasElement | null = null;
