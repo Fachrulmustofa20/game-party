@@ -298,7 +298,7 @@ export class PlatformApp {
             <button class="btn btn-secondary" id="btn-open-ctrl">
               + Buka Controller Simulasi (Tab Baru)
             </button>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div id="bot-fill-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
               <button class="btn btn-secondary" id="btn-fill-4">Isi 4P (Bots)</button>
               <button class="btn btn-secondary" id="btn-fill-10">Isi 10P (Bots)</button>
             </div>
@@ -346,7 +346,6 @@ export class PlatformApp {
                     )
                     .join('')}
                 </div>
-                <span style="font-size:12px;color:var(--muted);">UDP DataChannel + 8-Byte Binary</span>
               </div>
             </div>
             <div class="players-grid" id="players-grid"></div>
@@ -534,8 +533,12 @@ export class PlatformApp {
     const maxSlots = this.selectedGame.maxPlayers;
     if (this.playerMaxCountEl) this.playerMaxCountEl.textContent = String(maxSlots);
 
+    const botFillGrid = this.root.querySelector('#bot-fill-grid') as HTMLElement | null;
     const btnFill4 = this.root.querySelector('#btn-fill-4') as HTMLButtonElement | null;
     const btnFill10 = this.root.querySelector('#btn-fill-10') as HTMLButtonElement | null;
+    if (botFillGrid) {
+      botFillGrid.style.gridTemplateColumns = maxSlots >= 10 ? '1fr 1fr' : '1fr';
+    }
     if (btnFill4) {
       btnFill4.textContent = `Isi ${Math.min(4, maxSlots)}P (Bots)`;
     }

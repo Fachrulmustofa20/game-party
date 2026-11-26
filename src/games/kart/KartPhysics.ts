@@ -626,6 +626,7 @@ export function createKartMesh(
   lookBackTimer?: number;
   wrongWay?: boolean;
   wrongWaySprite?: THREE.Sprite;
+  nameplateSprite?: THREE.Sprite;
 } {
   const group = new THREE.Group();
   const char = getKartCharacter(characterId, slot);
@@ -1048,8 +1049,9 @@ export function createKartMesh(
   driver.add(headGroup);
   group.add(driver);
 
-  if (playerName) {
-    group.add(createNameplateSprite(playerName, kartColor));
+  const nameplateSprite = playerName ? createNameplateSprite(playerName, kartColor) : undefined;
+  if (nameplateSprite) {
+    group.add(nameplateSprite);
   }
   const wrongWaySprite = createWrongWaySprite();
   group.add(wrongWaySprite);
@@ -1150,6 +1152,7 @@ export function createKartMesh(
     headGroup,
     steerWheel,
     wrongWaySprite,
+    nameplateSprite,
   };
 }
 
