@@ -9,6 +9,8 @@ import { KartGame } from '../games/kart/KartGame';
 import { SpaceDogfightGame } from '../games/dogfight/SpaceDogfightGame';
 
 const ROOM_STORAGE_KEY = 'nitro_host_room_code';
+const DONATION_URL = 'https://saweria.co/fachrulmustofa';
+const DEVELOPER_URL = 'https://fachrulmustofa.site/';
 
 const BOT_COLORS = [
   '#ff4d4d',
@@ -300,6 +302,16 @@ export class PlatformApp {
               <button class="btn btn-secondary" id="btn-fill-10">Isi 10P (Bots)</button>
             </div>
             <button class="btn btn-danger" id="btn-clear-bots">Hapus Semua Bot</button>
+            <button
+              class="btn"
+              id="btn-donate"
+              style="background:linear-gradient(135deg,#f59e0b,#ec4899);color:#fff;font-weight:800;border:none;"
+            >
+              ♥ Donasi / Dukung Developer
+            </button>
+            <button class="btn btn-secondary" id="btn-help">
+              ? Bantuan &amp; Panduan
+            </button>
           </div>
 
           <div style="margin-top:auto;font-size:11px;color:var(--muted);border-top:1px solid var(--panel-border);padding-top:12px;">
@@ -315,7 +327,7 @@ export class PlatformApp {
               <h2 class="section-title">Pemain Terhubung (<span id="player-count">0</span> / <span id="player-max-count">${this.selectedGame.maxPlayers}</span>)</h2>
               <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div id="ai-level-bar" class="ai-level-bar" style="display:none;">
-                  <span style="font-size:12px;color:var(--muted);font-weight:700;">Level AI:</span>
+                  <span style="font-size:12px;color:var(--muted);font-weight:700;">Level Bot:</span>
                   ${(
                     [
                       ['easy', 'Mudah'],
@@ -376,6 +388,12 @@ export class PlatformApp {
     this.root.querySelector('#btn-clear-bots')?.addEventListener('click', () => {
       this.bots = [];
       this.renderPlayersGrid();
+    });
+    this.root.querySelector('#btn-donate')?.addEventListener('click', () => {
+      window.open(DONATION_URL, '_blank', 'noopener,noreferrer');
+    });
+    this.root.querySelector('#btn-help')?.addEventListener('click', () => {
+      this.showHelpModal();
     });
     this.root.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -701,6 +719,68 @@ export class PlatformApp {
     }
     this.net.sendReliableEvent('*', { type: 'returned_to_hub' });
     this.renderHub();
+  }
+
+  private showHelpModal(): void {
+    this.root.querySelector('#hub-help-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'hub-help-modal';
+    modal.style.cssText =
+      'position:fixed;inset:0;z-index:9999;background:rgba(2,6,23,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.innerHTML = `
+      <div style="width:min(680px,100%);max-height:90vh;overflow-y:auto;background:#0f172a;border:1px solid rgba(148,163,184,0.28);border-radius:18px;padding:24px;color:#f8fafc;box-shadow:0 24px 60px rgba(0,0,0,0.55);display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid rgba(148,163,184,0.2);padding-bottom:12px;">
+          <h2 style="margin:0;font-size:20px;font-weight:900;">Bantuan &amp; Panduan Bermain</h2>
+          <button type="button" id="btn-close-help" class="btn btn-secondary" style="padding:6px 12px;font-size:13px;">✕ Tutup</button>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.55;color:#cbd5e1;">
+          <div>
+            <h3 style="margin:0 0 6px;font-size:15px;color:#38bdf8;">1. Cara Menghubungkan Controller HP</h3>
+            <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;">
+              <li>Pastikan PC dan HP berada di <strong>jaringan Wi-Fi yang sama</strong>.</li>
+              <li>Scan <strong>QR Code</strong> di sidebar kiri menggunakan kamera HP, atau buka URL yang tertera lalu masukkan <strong>Kode Room</strong>.</li>
+              <li>Pilih karakter/pesawat yang tersedia (karakter yang sudah dipakai pemain lain atau AI otomatis terkunci).</li>
+              <li>Putar HP ke posisi <strong>Landscape</strong> untuk mulai bermain.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 style="margin:0 0 6px;font-size:15px;color:#38bdf8;">2. Bermain Solo atau Tambah AI Bot</h3>
+            <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;">
+              <li>Anda tetap bisa bermain sendiri di PC menggunakan <strong>Keyboard (W/A/S/D atau Panah, Space, Shift, E)</strong>.</li>
+              <li>Gunakan tombol <strong>Isi 4P / 10P (Bots)</strong> dan pilih <strong>Level Bot</strong> (Mudah, Sedang, Sulit, Dewa) untuk balapan atau bertarung melawan bot.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 style="margin:0 0 6px;font-size:15px;color:#38bdf8;">3. Kontrol Game</h3>
+            <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;">
+              <li><strong>Nitro Kart 3D (CTR Edition):</strong> Analog / Panah untuk stir, <strong>GAS</strong> untuk melaju, <strong>DRIFT</strong> untuk hop/drift, <strong>BOOST</strong> saat bar turbo penuh, dan <strong>ITEM</strong> untuk memakai senjata.</li>
+              <li><strong>Game Lain (Space Dogfight, dll.):</strong> Gunakan <strong>Analog / Tombol Arah</strong> dan tombol aksi <strong>A, B, C, D</strong> pada Default Controller.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="background:rgba(30,41,59,0.75);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+          <div>
+            <div style="font-size:12px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Tentang Developer</div>
+            <div style="font-size:16px;font-weight:900;color:#f8fafc;margin-top:2px;">Fachrul Mustofa</div>
+            <div style="font-size:13px;color:#cbd5e1;margin-top:2px;">Kreator Nitro Party Platform — Multiplayer WebRTC &amp; 3D Web Game.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="${DEVELOPER_URL}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="text-decoration:none;">Kunjungi Website</a>
+            <a href="${DONATION_URL}" target="_blank" rel="noopener noreferrer" class="btn" style="text-decoration:none;background:linear-gradient(135deg,#f59e0b,#ec4899);color:#fff;font-weight:800;">♥ Saweria</a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    modal.querySelector('#btn-close-help')?.addEventListener('click', () => modal.remove());
+    this.root.appendChild(modal);
   }
 
   private bindKeyboardFallback(): void {

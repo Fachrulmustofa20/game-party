@@ -109,20 +109,20 @@ const COVER_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
     <polygon points="42,0 -24,-22 -12,0 -24,22" fill="url(#ship2)" stroke="#ffe4e6" stroke-width="2"/>
     <circle cx="-18" cy="0" r="6" fill="#fda4af"/>
   </g>
-  <text x="320" y="325" text-anchor="middle" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="900" font-size="24" letter-spacing="4">SPACE DOGFIGHT 2P</text>
+  <text x="320" y="325" text-anchor="middle" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="900" font-size="24" letter-spacing="4">SPACE DOGFIGHT 10P</text>
 </svg>
 `)}`;
 
 export class SpaceDogfightGame implements PlatformGame {
   id = 'space-dogfight-2p';
-  title = 'Space Dogfight (2P Duel)';
+  title = 'Space Dogfight (10P Arena)';
   subtitle =
-    'Pertempuran pesawat luar angkasa 1v1! Stir analog untuk bermanuver, Gas untuk thrust, Drift untuk Barrel Roll, Boost untuk Afterburner, dan Item untuk menembak.';
-  badge = '2 PLAYER DUEL • 3D SPACE';
+    'Pertempuran pesawat luar angkasa hingga 10 pemain! Stir analog untuk bermanuver, Gas untuk thrust, Drift untuk Barrel Roll, Boost untuk Afterburner, dan Item untuk menembak.';
+  badge = '2-10 PLAYER • 3D SPACE';
   accentColor = '#38bdf8';
   coverImage = COVER_SVG;
   minPlayers = 2;
-  maxPlayers = 2;
+  maxPlayers = 10;
   controllerLayout: 'racing-ctr' = 'racing-ctr';
 
   private container: HTMLElement | null = null;
@@ -377,17 +377,27 @@ export class SpaceDogfightGame implements PlatformGame {
     return { group, shield, flameLeft, flameRight };
   }
 
+  private getSpawnPoints(count: number): Array<{ x: number; z: number; angle: number }> {
+    const total = Math.max(2, count);
+    const rx = ARENA_HALF_W * 0.72;
+    const rz = ARENA_HALF_H * 0.72;
+    return Array.from({ length: total }, (_, idx) => {
+      const theta = Math.PI + (idx / total) * Math.PI * 2;
+      const x = Math.cos(theta) * rx;
+      const z = Math.sin(theta) * rz;
+      const angle = Math.atan2(-z, -x);
+      return { x, z, angle };
+    });
+  }
+
   private spawnShips(scene: THREE.Scene): void {
-    const players = (this.sdk?.getPlayers() ?? []).slice(0, 2);
-    const spawns = [
-      { x: -58, z: 0, angle: 0, defaultColor: '#38bdf8' },
-      { x: 58, z: 0, angle: Math.PI, defaultColor: '#fb7185' },
-    ];
+    const players = (this.sdk?.getPlayers() ?? []).slice(0, 10);
+    const spawns = this.getSpawnPoints(players.length);
 
     players.forEach((p, idx) => {
       const sp = spawns[idx] ?? spawns[0];
       const charSpec = getSpaceCharacter(p.characterId, p.slot);
-      const color = p.isBot ? charSpec.color : p.color || charSpec.color || sp.defaultColor;
+      const color = p.isBot ? charSpec.color : p.color || charSpec.color;
       const { group, shield, flameLeft, flameRight } = this.createShipMesh(color, charSpec.accent);
       group.position.set(sp.x, 0, sp.z);
       group.rotation.y = -sp.angle;
@@ -420,10 +430,7 @@ export class SpaceDogfightGame implements PlatformGame {
   }
 
   private resetRound(): void {
-    const spawns = [
-      { x: -58, z: 0, angle: 0 },
-      { x: 58, z: 0, angle: Math.PI },
-    ];
+    const spawns = this.getSpawnPoints(this.ships.length);
     this.ships.forEach((s, idx) => {
       const sp = spawns[idx] ?? spawns[0];
       s.x = sp.x;
@@ -458,32 +465,12 @@ export class SpaceDogfightGame implements PlatformGame {
       'position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:18px 24px;font-family:system-ui,sans-serif;';
 
     hud.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
-        <div id="df-p1-card" style="min-width:250px;background:rgba(9,13,31,0.82);border:1px solid rgba(56,189,248,0.45);border-radius:14px;padding:10px 14px;backdrop-filter:blur(8px);">
-          <div style="display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:14px;">
-            <span id="df-p1-name">P1</span>
-            <span id="df-p1-score" style="color:#facc15;letter-spacing:2px;">☆☆☆</span>
-          </div>
-          <div style="height:10px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:6px;">
-            <div id="df-p1-hp" style="width:100%;height:100%;background:linear-gradient(90deg,#0284c7,#38bdf8);transition:width 0.1s;"></div>
-          </div>
-          <div id="df-p1-pu" style="font-size:11px;color:#7dd3fc;margin-top:4px;font-weight:700;">Siap Tempur</div>
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div id="df-players-hud" style="flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,230px));gap:8px;"></div>
 
-        <div style="text-align:center;background:rgba(9,13,31,0.82);border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:8px 18px;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <div style="text-align:center;background:rgba(9,13,31,0.82);border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:8px 18px;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;">
           <div id="df-round-label" style="font-size:12px;font-weight:900;letter-spacing:0.12em;color:#e2e8f0;">RONDE 1 • FIRST TO 3</div>
           <button id="df-exit-btn" type="button" style="border:none;background:rgba(239,68,68,0.2);color:#fca5a5;border-radius:8px;padding:4px 12px;font-size:11px;font-weight:800;cursor:pointer;">Keluar ke Hub</button>
-        </div>
-
-        <div id="df-p2-card" style="min-width:250px;background:rgba(9,13,31,0.82);border:1px solid rgba(251,113,133,0.45);border-radius:14px;padding:10px 14px;backdrop-filter:blur(8px);text-align:right;">
-          <div style="display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:14px;">
-            <span id="df-p2-score" style="color:#facc15;letter-spacing:2px;">☆☆☆</span>
-            <span id="df-p2-name">P2</span>
-          </div>
-          <div style="height:10px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:6px;">
-            <div id="df-p2-hp" style="width:100%;height:100%;background:linear-gradient(90deg,#e11d48,#fb7185);transition:width 0.1s;margin-left:auto;"></div>
-          </div>
-          <div id="df-p2-pu" style="font-size:11px;color:#fda4af;margin-top:4px;font-weight:700;">Siap Tempur</div>
         </div>
       </div>
 
@@ -514,29 +501,37 @@ export class SpaceDogfightGame implements PlatformGame {
 
   private updateHud(): void {
     if (!this.hudEl) return;
-    const [s1, s2] = this.ships;
     const renderStars = (score: number) => '★'.repeat(score) + '☆'.repeat(Math.max(0, ROUNDS_TO_WIN - score));
-    const puText = (s?: ShipState) => {
-      if (!s) return '';
+    const puText = (s: ShipState) => {
+      if (s.hp <= 0) return 'HANCUR';
       if (s.powerUp === 'triple') return `TRIPLE LASER (${Math.ceil(s.powerUpTimer)}s)`;
       if (s.powerUp === 'missile') return `HOMING MISSILE (${Math.ceil(s.powerUpTimer)}s)`;
       if (s.powerUp === 'shield') return `ENERGY SHIELD (${Math.ceil(s.powerUpTimer)}s)`;
-      return s.boostCooldown > 0 ? `Afterburner: ${Math.ceil(s.boostCooldown)}s` : 'Afterburner SIAP!';
+      return s.boostCooldown > 0 ? `Boost: ${Math.ceil(s.boostCooldown)}s` : 'Boost SIAP!';
     };
 
-    if (s1) {
-      const c1 = getSpaceCharacter(s1.player.characterId, s1.player.slot);
-      (this.hudEl.querySelector('#df-p1-name') as HTMLElement).textContent = `P1 ${s1.player.name} (${c1.name})`;
-      (this.hudEl.querySelector('#df-p1-score') as HTMLElement).textContent = renderStars(s1.score);
-      (this.hudEl.querySelector('#df-p1-hp') as HTMLElement).style.width = `${Math.max(0, s1.hp)}%`;
-      (this.hudEl.querySelector('#df-p1-pu') as HTMLElement).textContent = puText(s1);
-    }
-    if (s2) {
-      const c2 = getSpaceCharacter(s2.player.characterId, s2.player.slot);
-      (this.hudEl.querySelector('#df-p2-name') as HTMLElement).textContent = `${s2.player.name} (${c2.name}) P2`;
-      (this.hudEl.querySelector('#df-p2-score') as HTMLElement).textContent = renderStars(s2.score);
-      (this.hudEl.querySelector('#df-p2-hp') as HTMLElement).style.width = `${Math.max(0, s2.hp)}%`;
-      (this.hudEl.querySelector('#df-p2-pu') as HTMLElement).textContent = puText(s2);
+    const playersHud = this.hudEl.querySelector('#df-players-hud');
+    if (playersHud) {
+      playersHud.innerHTML = this.ships
+        .map((s) => {
+          const ch = getSpaceCharacter(s.player.characterId, s.player.slot);
+          const color = s.player.isBot ? ch.color : s.player.color || ch.color;
+          const hpPct = Math.max(0, Math.round(s.hp));
+          return `
+            <div style="background:rgba(9,13,31,0.82);border:1px solid ${color}77;border-radius:12px;padding:7px 10px;backdrop-filter:blur(6px);opacity:${s.hp <= 0 ? '0.52' : '1'};">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;font-weight:800;font-size:12px;">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">P${s.player.slot + 1} ${s.player.name}</span>
+                <span style="color:#facc15;letter-spacing:1px;flex-shrink:0;">${renderStars(s.score)}</span>
+              </div>
+              <div style="font-size:10px;color:#94a3b8;margin-top:1px;">${ch.name}</div>
+              <div style="height:7px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:4px;">
+                <div style="width:${hpPct}%;height:100%;background:${color};transition:width 0.1s;"></div>
+              </div>
+              <div style="font-size:10px;color:#cbd5e1;margin-top:3px;font-weight:700;">${puText(s)}</div>
+            </div>
+          `;
+        })
+        .join('');
     }
     const roundLbl = this.hudEl.querySelector('#df-round-label');
     if (roundLbl) roundLbl.textContent = `RONDE ${this.roundNumber} • FIRST TO ${ROUNDS_TO_WIN}`;
@@ -646,8 +641,12 @@ export class SpaceDogfightGame implements PlatformGame {
     }
 
     // Step ships
-    this.ships.forEach((ship, idx) => {
-      const enemy = this.ships[1 - idx];
+    for (const ship of this.ships) {
+      if (ship.hp <= 0) {
+        this.audio.updateShipThruster(ship.player.id, ship.player.slot, false, false);
+        continue;
+      }
+      const enemy = this.findNearestEnemy(ship);
       const input = ship.player.isBot
         ? this.computeBotInput(ship, enemy)
         : this.sdk?.getInput(ship.player.id) ?? {
@@ -771,7 +770,7 @@ export class SpaceDogfightGame implements PlatformGame {
       const flameScale = ship.boostTimer > 0 ? 1.8 : input.gas ? 1.0 : 0.25;
       ship.flameLeft.scale.set(1, flameScale, 1);
       ship.flameRight.scale.set(1, flameScale, 1);
-    });
+    }
 
     // Step projectiles
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -813,7 +812,7 @@ export class SpaceDogfightGame implements PlatformGame {
       // Hit enemy ship
       if (!remove) {
         for (const ship of this.ships) {
-          if (ship.player.id === pr.ownerId) continue;
+          if (ship.hp <= 0 || ship.player.id === pr.ownerId) continue;
           if (Math.hypot(pr.x - ship.x, pr.z - ship.z) < 3.4) {
             remove = true;
             if (ship.dodgeTimer <= 0) {
@@ -936,12 +935,32 @@ export class SpaceDogfightGame implements PlatformGame {
     }
   }
 
+  private findNearestEnemy(ship: ShipState): ShipState | undefined {
+    let best: ShipState | undefined;
+    let bestDist = Infinity;
+    for (const other of this.ships) {
+      if (other.player.id === ship.player.id || other.hp <= 0) continue;
+      const d = Math.hypot(other.x - ship.x, other.z - ship.z);
+      if (d < bestDist) {
+        bestDist = d;
+        best = other;
+      }
+    }
+    return best;
+  }
+
   private handleShipDestroyed(victim: ShipState, killerId: string): void {
     victim.mesh.visible = false;
     this.spawnExplosion(victim.x, victim.z, victim.player.color, 26);
     this.sdk?.sendVibrate(victim.player.id, [120, 40, 160]);
 
-    const killer = this.ships.find((s) => s.player.id === killerId);
+    const alive = this.ships.filter((s) => s.hp > 0);
+    if (alive.length > 1) {
+      this.updateHud();
+      return;
+    }
+
+    const killer = alive[0] ?? this.ships.find((s) => s.player.id === killerId);
     if (killer) {
       killer.score++;
       this.sdk?.sendVibrate(killer.player.id, [50, 30, 80]);
@@ -990,20 +1009,27 @@ export class SpaceDogfightGame implements PlatformGame {
 
   private updateCamera(dt: number): void {
     if (!this.camera || this.ships.length === 0) return;
+    const active = this.ships.filter((s) => s.hp > 0);
+    const list = active.length > 0 ? active : this.ships;
     let cx = 0;
     let cz = 0;
-    for (const s of this.ships) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const s of list) {
       cx += s.x;
       cz += s.z;
+      if (s.x < minX) minX = s.x;
+      if (s.x > maxX) maxX = s.x;
+      if (s.z < minZ) minZ = s.z;
+      if (s.z > maxZ) maxZ = s.z;
     }
-    cx /= this.ships.length;
-    cz /= this.ships.length;
+    cx /= list.length;
+    cz /= list.length;
 
-    const dist =
-      this.ships.length >= 2
-        ? Math.hypot(this.ships[0].x - this.ships[1].x, this.ships[0].z - this.ships[1].z)
-        : 40;
-    const camHeight = Math.max(76, Math.min(138, 62 + dist * 0.72));
+    const spread = list.length >= 2 ? Math.hypot(maxX - minX, maxZ - minZ) : 40;
+    const camHeight = Math.max(76, Math.min(155, 62 + spread * 0.72));
 
     this.camera.position.x += (cx * 0.65 - this.camera.position.x) * Math.min(1, 5 * dt);
     this.camera.position.y += (camHeight - this.camera.position.y) * Math.min(1, 5 * dt);

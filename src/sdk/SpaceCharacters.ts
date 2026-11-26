@@ -58,6 +58,38 @@ export const SPACE_CHARACTERS: SpaceCharacterSpec[] = [
     color: '#2563eb',
     accent: '#67e8f9',
   },
+  {
+    id: 'valkyrie',
+    name: 'Solaris Gold',
+    shipLabel: 'Royal Delta',
+    shipStyle: 'delta',
+    color: '#eab308',
+    accent: '#fef9c3',
+  },
+  {
+    id: 'frost',
+    name: 'Frost Nova',
+    shipLabel: 'Cryo Stealth',
+    shipStyle: 'stealth',
+    color: '#06b6d4',
+    accent: '#cffafe',
+  },
+  {
+    id: 'crimson_twin',
+    name: 'Blaze Twin',
+    shipLabel: 'Dual Cannon',
+    shipStyle: 'twin',
+    color: '#ec4899',
+    accent: '#fbcfe8',
+  },
+  {
+    id: 'obsidian',
+    name: 'Obsidian Dread',
+    shipLabel: 'Siege Heavy',
+    shipStyle: 'heavy',
+    color: '#64748b',
+    accent: '#f8fafc',
+  },
 ];
 
 export function getSpaceCharacter(characterId?: string, slot = 0): SpaceCharacterSpec {
