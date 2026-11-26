@@ -51,6 +51,14 @@ export interface TrackObstacle {
   phase: number;
 }
 
+interface TropicalWaveRing {
+  mesh: THREE.Mesh;
+  geom: THREE.BufferGeometry;
+  mat: THREE.MeshStandardMaterial;
+  phaseOffset: number;
+  seed: number;
+}
+
 export class TrackBuilder {
   readonly curve: THREE.CatmullRomCurve3;
   readonly roadHalfWidth: number;
@@ -64,6 +72,8 @@ export class TrackBuilder {
   readonly bounds = { minX: -320, maxX: 320, minZ: -320, maxZ: 320 };
   readonly mapId: TrackMapId;
   private waterMesh: THREE.Mesh | null = null;
+  private wetShoreMat: THREE.MeshStandardMaterial | null = null;
+  private tropicalWaves: TropicalWaveRing[] = [];
   private boostPadMat: THREE.MeshStandardMaterial | null = null;
   private snowPoints: THREE.Points | null = null;
   private lastVisualTime = 0;
@@ -143,6 +153,9 @@ export class TrackBuilder {
 
     this.buildSkyAndOcean(scene);
     this.buildIslandTerrain(scene);
+    if (this.mapId === 'crash-cove') {
+      this.buildTropicalBeachWaves(scene);
+    }
     this.buildRoadAndCurbs(scene);
     this.buildTrackGuardrailsAndTunnel(scene);
     this.buildLandmarks(scene);
@@ -258,15 +271,39 @@ export class TrackBuilder {
   }
 
   private buildIslandTerrain(scene: THREE.Scene): void {
+    const isTropical = this.mapId === 'crash-cove';
     const outerColor =
       this.mapId === 'neon-canyon' ? '#3b0764' : this.mapId === 'ice-peak' ? '#bae6fd' : '#f3d08a';
+    const sandTopR = isTropical ? 350 : 360;
+    const sandBotR = isTropical ? 388 : 390;
     const sand = new THREE.Mesh(
-      new THREE.CylinderGeometry(360, 390, 2.6, 56),
+      new THREE.CylinderGeometry(sandTopR, sandBotR, 2.6, isTropical ? 72 : 56),
       new THREE.MeshStandardMaterial({ color: outerColor, roughness: 0.92 })
     );
     sand.position.set(0, -1.35, 0);
     sand.receiveShadow = true;
     scene.add(sand);
+
+    if (isTropical) {
+      // Wet glistening shoreline sand apron where waves wash up and recede
+      const wetShore = new THREE.Mesh(
+        new THREE.RingGeometry(336, 351, 72),
+        new THREE.MeshStandardMaterial({
+          color: '#d6a960',
+          roughness: 0.24,
+          metalness: 0.12,
+          transparent: true,
+          opacity: 0.65,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+        })
+      );
+      wetShore.rotation.x = -Math.PI / 2;
+      wetShore.position.y = -0.03;
+      wetShore.receiveShadow = true;
+      scene.add(wetShore);
+      this.wetShoreMat = wetShore.material;
+    }
 
     const grassCanvas = document.createElement('canvas');
     grassCanvas.width = 256;
@@ -297,12 +334,206 @@ export class TrackBuilder {
     grassTex.colorSpace = THREE.SRGBColorSpace;
 
     const grass = new THREE.Mesh(
-      new THREE.CylinderGeometry(325, 338, 0.7, 56),
+      new THREE.CylinderGeometry(isTropical ? 318 : 325, isTropical ? 330 : 338, 0.7, isTropical ? 72 : 56),
       new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.9 })
     );
     grass.position.set(0, -0.35, 0);
     grass.receiveShadow = true;
     scene.add(grass);
+  }
+
+  private sampleTropicalShoreY(r: number): number {
+    // Matches sand CylinderGeometry(350, 388, 2.6) centered at y = -1.35 and ocean at y = -2.2
+    if (r <= 350) return -0.05;
+    const slopeY = -0.05 - ((r - 350) / 38) * 2.6;
+    return Math.max(-2.2, slopeY);
+  }
+
+  private buildTropicalBeachWaves(scene: THREE.Scene): void {
+    // Procedural breaking-surf & lacy white seafoam texture (u = around shore, v = 0 leading foam -> 1 trailing turquoise body)
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, 512, 256);
+
+    // Base water-to-foam cross-section gradient
+    const bodyGrad = ctx.createLinearGradient(0, 0, 0, 256);
+    bodyGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.0)');
+    bodyGrad.addColorStop(0.06, 'rgba(255, 255, 255, 0.98)');
+    bodyGrad.addColorStop(0.28, 'rgba(240, 253, 255, 0.94)');
+    bodyGrad.addColorStop(0.48, 'rgba(56, 189, 248, 0.82)');
+    bodyGrad.addColorStop(0.76, 'rgba(14, 165, 233, 0.52)');
+    bodyGrad.addColorStop(1.0, 'rgba(2, 132, 199, 0.0)');
+    ctx.fillStyle = bodyGrad;
+    ctx.fillRect(0, 0, 512, 256);
+
+    // Frothy organic bubbles & scalloped foam lace along leading lip and surf body
+    for (let i = 0; i < 260; i++) {
+      const bx = Math.random() * 512;
+      const by = 10 + Math.pow(Math.random(), 1.7) * 165;
+      const rx = 6 + Math.random() * 20;
+      const ry = 3 + Math.random() * 9;
+      ctx.fillStyle =
+        by < 75 ? 'rgba(255, 255, 255, 0.88)' : 'rgba(224, 242, 254, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(bx, by, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const waveTex = new THREE.CanvasTexture(canvas);
+    waveTex.wrapS = THREE.RepeatWrapping;
+    waveTex.wrapT = THREE.ClampToEdgeWrapping;
+    waveTex.repeat.set(20, 1);
+    waveTex.colorSpace = THREE.SRGBColorSpace;
+
+    const segTheta = 96;
+    const segRad = 5; // 6 profile vertices from leading foam toe (0) to trailing wave back (5)
+    const ringCount = 5;
+
+    for (let w = 0; w < ringCount; w++) {
+      const vertCount = (segTheta + 1) * (segRad + 1);
+      const positions = new Float32Array(vertCount * 3);
+      const uvs = new Float32Array(vertCount * 2);
+      const indices: number[] = [];
+
+      for (let i = 0; i <= segTheta; i++) {
+        const u = i / segTheta;
+        for (let j = 0; j <= segRad; j++) {
+          const v = j / segRad;
+          const idx = i * (segRad + 1) + j;
+          uvs[idx * 2 + 0] = u;
+          uvs[idx * 2 + 1] = v;
+        }
+      }
+
+      for (let i = 0; i < segTheta; i++) {
+        for (let j = 0; j < segRad; j++) {
+          const a = i * (segRad + 1) + j;
+          const b = (i + 1) * (segRad + 1) + j;
+          const c = a + 1;
+          const d = b + 1;
+          indices.push(a, c, b, b, c, d);
+        }
+      }
+
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      geom.setIndex(indices);
+
+      const mat = new THREE.MeshStandardMaterial({
+        map: waveTex,
+        roughness: 0.18,
+        metalness: 0.08,
+        emissive: '#bae6fd',
+        emissiveIntensity: 0.18,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.renderOrder = 4 + w;
+      scene.add(mesh);
+
+      this.tropicalWaves.push({
+        mesh,
+        geom,
+        mat,
+        phaseOffset: w / ringCount,
+        seed: w * 1.93 + 0.7,
+      });
+    }
+
+    this.updateTropicalWaves(0);
+  }
+
+  private updateTropicalWaves(timeSec: number): void {
+    if (this.tropicalWaves.length === 0) return;
+
+    const segTheta = 96;
+    const segRad = 5;
+    const profileHeights = [0.0, 0.84, 1.0, 0.66, 0.26, 0.0];
+    const rOuter = 458; // Offshore swell spawn radius
+    const rSwashMin = 335; // High-tide swash line on golden beach sand
+
+    if (this.wetShoreMat) {
+      this.wetShoreMat.opacity = 0.52 + Math.sin(timeSec * 1.35) * 0.16;
+    }
+
+    for (const wave of this.tropicalWaves) {
+      // Full wave lifecycle ~6.25s; 5 staggered rings => a fresh wave rolls onto the beach every ~1.25s!
+      const p = (timeSec * 0.16 + wave.phaseOffset) % 1;
+
+      // Inward travel (0..0.85) with natural beach deceleration, followed by gentle backwash retreat (0.85..1.0)
+      let travel: number;
+      if (p < 0.85) {
+        const t = p / 0.85;
+        travel = 1 - Math.pow(1 - t, 1.42);
+      } else {
+        const back = (p - 0.85) / 0.15;
+        travel = 1 - back * 0.085;
+      }
+
+      const baseFrontR = rOuter - (rOuter - rSwashMin) * travel;
+
+      // 3D wave height peaks in the surf zone (p ~ 0.42) then flattens into lacy beach foam swash
+      const swellBell = Math.sin(Math.min(1, p / 0.78) * Math.PI);
+      const crestH =
+        p < 0.78
+          ? 0.25 + Math.pow(swellBell, 0.85) * 2.15
+          : 0.18 * (1 - (p - 0.78) / 0.22);
+
+      // Forward curl overhang when cresting in shallow surf
+      const curlStrength = p > 0.22 && p < 0.68 ? Math.sin(((p - 0.22) / 0.46) * Math.PI) * 1.65 : 0;
+
+      // Radial width of wave + foam apron
+      const bandWidth = p < 0.55 ? 20 + p * 14 : 27.7 - (p - 0.55) * 18;
+
+      // Smooth fade-in offshore and foam dissolve on wet sand
+      let opacity = 0.94;
+      if (p < 0.13) {
+        opacity = (p / 0.13) * 0.94;
+      } else if (p > 0.78) {
+        opacity = (1 - (p - 0.78) / 0.22) * 0.94;
+      }
+      wave.mat.opacity = Math.max(0, Math.min(0.95, opacity));
+
+      const posAttr = wave.geom.getAttribute('position') as THREE.BufferAttribute;
+      const arr = posAttr.array as Float32Array;
+
+      for (let i = 0; i <= segTheta; i++) {
+        const theta = (i / segTheta) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        // Natural coastal scalloping so wave fronts undulate organically along the beach
+        const scallop =
+          Math.sin(theta * 6 + wave.seed + timeSec * 0.35) * 3.6 +
+          Math.cos(theta * 11 - wave.seed * 1.4 - timeSec * 0.55) * 1.9;
+        const localHeightVar = 0.86 + 0.18 * Math.sin(theta * 5 + wave.seed * 2.1);
+
+        const frontR = baseFrontR + scallop;
+
+        for (let j = 0; j <= segRad; j++) {
+          const s = j / segRad;
+          const curlOffset = j === 1 || j === 2 ? -curlStrength : 0;
+          const r = frontR + s * bandWidth + curlOffset;
+          const groundY = this.sampleTropicalShoreY(r);
+          const y = groundY + 0.11 + profileHeights[j] * crestH * localHeightVar;
+
+          const idx = (i * (segRad + 1) + j) * 3;
+          arr[idx + 0] = cosT * r;
+          arr[idx + 1] = y;
+          arr[idx + 2] = sinT * r;
+        }
+      }
+
+      posAttr.needsUpdate = true;
+      wave.geom.computeVertexNormals();
+    }
   }
 
   private buildRoadAndCurbs(scene: THREE.Scene): void {
@@ -492,34 +723,30 @@ export class TrackBuilder {
     archGroup.position.copy(startPt);
     archGroup.lookAt(startPt.clone().add(startTan));
 
-    const pillarGeo = new THREE.CylinderGeometry(0.9, 1.2, 12, 10);
+    const pillarGeo = new THREE.CylinderGeometry(0.9, 1.2, 9.4, 10);
     const pillarMat = new THREE.MeshStandardMaterial({ color: '#ff6b2b', roughness: 0.35 });
     const leftPillar = new THREE.Mesh(pillarGeo, pillarMat);
-    leftPillar.position.set(-this.roadHalfWidth, 6, 0);
+    leftPillar.position.set(-this.roadHalfWidth, 4.7, 0);
     leftPillar.castShadow = true;
     const rightPillar = new THREE.Mesh(pillarGeo, pillarMat);
-    rightPillar.position.set(this.roadHalfWidth, 6, 0);
+    rightPillar.position.set(this.roadHalfWidth, 4.7, 0);
     rightPillar.castShadow = true;
 
-    // Checkered banner texture
-    const chkCanvas = document.createElement('canvas');
-    chkCanvas.width = 256;
-    chkCanvas.height = 64;
-    const cctx = chkCanvas.getContext('2d')!;
-    for (let y = 0; y < 4; y++) {
-      for (let x = 0; x < 16; x++) {
-        cctx.fillStyle = (x + y) % 2 === 0 ? '#0f172a' : '#f8fafc';
-        cctx.fillRect(x * 16, y * 16, 16, 16);
-      }
-    }
-    const chkTex = new THREE.CanvasTexture(chkCanvas);
-    chkTex.colorSpace = THREE.SRGBColorSpace;
-
+    // Main Start/Finish Arch Banner Asset ("Fachrul butuh donasi" with checkered racing trim)
+    const promoTex = this.createDonationPromoTexture(true);
+    const bannerFrameMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.45 });
+    const bannerFaceMat = new THREE.MeshStandardMaterial({
+      map: promoTex,
+      emissive: '#ffffff',
+      emissiveMap: promoTex,
+      emissiveIntensity: 0.24,
+      roughness: 0.32,
+    });
     const banner = new THREE.Mesh(
-      new THREE.BoxGeometry(this.roadHalfWidth * 2 + 2.4, 3.2, 1.4),
-      new THREE.MeshStandardMaterial({ map: chkTex, roughness: 0.4 })
+      new THREE.BoxGeometry(this.roadHalfWidth * 2 + 2.4, 3.8, 1.2),
+      [bannerFrameMat, bannerFrameMat, bannerFrameMat, bannerFrameMat, bannerFaceMat, bannerFaceMat]
     );
-    banner.position.set(0, 11.2, 0);
+    banner.position.set(0, 7.6, 0);
     banner.castShadow = true;
 
     // Checkered Start/Finish Line painted on the road surface
@@ -716,49 +943,160 @@ export class TrackBuilder {
       scene.add(arch);
     }
 
-    // Trackside CTR-style Billboards
-    const billboardTs = [0.08, 0.28, 0.52, 0.86];
-    const labels = ['NITRO KART!', 'DRIFT BOOST!', 'CRASH COVE', 'TURBO!'];
+    // Overhead Sponsor Promotion Gantries ("Fachrul butuh donasi" at driver eye-line height)
+    const promoGantryTex = this.createDonationPromoTexture(false);
+    const frameSideMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.45 });
+    const promoFaceMat = new THREE.MeshStandardMaterial({
+      map: promoGantryTex,
+      emissive: '#ffffff',
+      emissiveMap: promoGantryTex,
+      emissiveIntensity: 0.24,
+      roughness: 0.32,
+    });
+    const promoBoxMats = [
+      frameSideMat,
+      frameSideMat,
+      frameSideMat,
+      frameSideMat,
+      promoFaceMat,
+      promoFaceMat,
+    ];
+    const gantryPillarMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      metalness: 0.7,
+      roughness: 0.35,
+    });
+    const gantryAccentMat = new THREE.MeshStandardMaterial({
+      color: '#facc15',
+      emissive: '#ca8a04',
+      emissiveIntensity: 0.25,
+      roughness: 0.3,
+    });
+    for (const gt of [0.36, 0.79]) {
+      const gp = this.curve.getPointAt(gt);
+      const gtan = this.curve.getTangentAt(gt).normalize();
+      const gantry = new THREE.Group();
+      gantry.position.copy(gp);
+      gantry.lookAt(gp.clone().sub(gtan));
+
+      for (const side of [-1, 1]) {
+        const px = side * (this.roadHalfWidth + 1.1);
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.85, 8.8, 10), gantryPillarMat);
+        col.position.set(px, 4.4, 0);
+        col.castShadow = true;
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.65, 10), gantryAccentMat);
+        ring.position.set(px, 6.2, 0);
+        gantry.add(col, ring);
+      }
+
+      const promoSign = new THREE.Mesh(
+        new THREE.BoxGeometry(this.roadHalfWidth * 2 + 2.8, 3.6, 0.95),
+        promoBoxMats
+      );
+      promoSign.position.set(0, 7.4, 0);
+      promoSign.castShadow = true;
+      gantry.add(promoSign);
+      scene.add(gantry);
+    }
+
+    // Trackside CTR-style Billboards — In-Game "Fachrul butuh donasi" Banner Assets
+    const billboardTs = [0.07, 0.20, 0.31, 0.47, 0.60, 0.75, 0.89];
     billboardTs.forEach((t, idx) => {
       const p = this.curve.getPointAt(t);
       const tan = this.curve.getTangentAt(t).normalize();
       const right = new THREE.Vector3().crossVectors(tan, up).normalize();
-      const pos = p.clone().addScaledVector(right, idx % 2 === 0 ? -this.roadHalfWidth - 5 : this.roadHalfWidth + 5);
-
-      const bCanvas = document.createElement('canvas');
-      bCanvas.width = 256;
-      bCanvas.height = 96;
-      const bctx = bCanvas.getContext('2d')!;
-      bctx.fillStyle = idx % 2 === 0 ? '#ea580c' : '#0284c7';
-      bctx.fillRect(0, 0, 256, 96);
-      bctx.strokeStyle = '#fde047';
-      bctx.lineWidth = 8;
-      bctx.strokeRect(4, 4, 248, 88);
-      bctx.fillStyle = '#ffffff';
-      bctx.font = '900 32px sans-serif';
-      bctx.textAlign = 'center';
-      bctx.textBaseline = 'middle';
-      bctx.fillText(labels[idx % labels.length], 128, 48);
-
-      const bTex = new THREE.CanvasTexture(bCanvas);
-      bTex.colorSpace = THREE.SRGBColorSpace;
+      const sideDir = idx % 2 === 0 ? -1 : 1;
+      const pos = p.clone().addScaledVector(right, sideDir * (this.roadHalfWidth + 5.2));
 
       const board = new THREE.Group();
       board.position.copy(pos);
-      board.lookAt(p);
-      const sign = new THREE.Mesh(
-        new THREE.BoxGeometry(10, 3.8, 0.5),
-        new THREE.MeshStandardMaterial({ map: bTex, roughness: 0.4 })
-      );
-      sign.position.y = 4.6;
+      // Angle billboard toward oncoming drivers along the track
+      board.lookAt(p.clone().addScaledVector(tan, -20));
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(13.2, 4.0, 0.55), promoBoxMats);
+      sign.position.y = 3.5;
       sign.castShadow = true;
-      const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 4.6, 6), postMat);
-      legL.position.set(-3.5, 2.3, 0);
-      const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 4.6, 6), postMat);
-      legR.position.set(3.5, 2.3, 0);
+      const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 3.5, 6), postMat);
+      legL.position.set(-4.5, 1.75, 0);
+      const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 3.5, 6), postMat);
+      legR.position.set(4.5, 1.75, 0);
       board.add(sign, legL, legR);
       scene.add(board);
     });
+  }
+
+  private createDonationPromoTexture(withCheckeredTrim = false): THREE.CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = 1024;
+    c.height = 256;
+    const ctx = c.getContext('2d')!;
+
+    // Rich racing-sponsor dark-navy to fiery-amber gradient
+    const bg = ctx.createLinearGradient(0, 0, 1024, 256);
+    bg.addColorStop(0, '#0f172a');
+    bg.addColorStop(0.5, '#9a3412');
+    bg.addColorStop(1, '#0f172a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 1024, 256);
+
+    // Diagonal speed stripes
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.14)';
+    for (let x = -120; x < 1100; x += 110) {
+      ctx.beginPath();
+      ctx.moveTo(x, 256);
+      ctx.lineTo(x + 52, 256);
+      ctx.lineTo(x + 122, 0);
+      ctx.lineTo(x + 70, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    if (withCheckeredTrim) {
+      // Checkered racing strips along top & bottom edges for Start/Finish Arch banner
+      const sq = 24;
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < Math.ceil(1024 / sq); col++) {
+          ctx.fillStyle = (row + col) % 2 === 0 ? '#ffffff' : '#0f172a';
+          ctx.fillRect(col * sq, row * 14, sq, 14);
+          ctx.fillRect(col * sq, 256 - (row + 1) * 14, sq, 14);
+        }
+      }
+    } else {
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(10, 10, 1004, 236);
+      ctx.strokeStyle = '#ff6b2b';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(24, 24, 976, 208);
+    }
+
+    // Top sponsor pill
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.roundRect(332, 34, 360, 40, 20);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 21px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('★ OFFICIAL PROMOTION ★', 512, 55);
+
+    // Main bold in-game banner headline: "Fachrul butuh donasi"
+    ctx.font = '900 78px Inter, system-ui, sans-serif';
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = '#090d16';
+    ctx.strokeText('Fachrul butuh donasi', 512, 148);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('Fachrul butuh donasi', 512, 148);
+
+    // Subtitle accent
+    ctx.fillStyle = '#fde047';
+    ctx.font = '800 23px Inter, system-ui, sans-serif';
+    ctx.fillText('💸 SUPPORT SERVER & KOPI DEVELOPER ☕', 512, 208);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 8;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
   }
 
   private buildRocksAndBushes(scene: THREE.Scene): void {
@@ -1184,7 +1522,24 @@ export class TrackBuilder {
     );
     roof.position.set(0, 14.2, -1);
     roof.rotation.x = 0.12;
-    stand.add(roof);
+
+    // Stadium Fascia Banner Asset on the Grandstand ("Fachrul butuh donasi")
+    const standPromoTex = this.createDonationPromoTexture(false);
+    const standBanner = new THREE.Mesh(
+      new THREE.PlaneGeometry(36, 4.2),
+      new THREE.MeshStandardMaterial({
+        map: standPromoTex,
+        emissive: '#ffffff',
+        emissiveMap: standPromoTex,
+        emissiveIntensity: 0.22,
+        roughness: 0.35,
+        side: THREE.DoubleSide,
+      })
+    );
+    standBanner.position.set(0, 12.1, -7.8);
+    standBanner.rotation.y = Math.PI;
+
+    stand.add(roof, standBanner);
     scene.add(stand);
 
     // Carved Tiki Totems with Glowing Eyes & Flame Torches
@@ -1755,13 +2110,109 @@ export class TrackBuilder {
     const up = new THREE.Vector3(0, 1, 0);
     let id = 0;
 
-    // 1. Dark Oil Slick Puddles
-    const oilGeo = new THREE.CylinderGeometry(3.1, 3.2, 0.12, 16);
-    const oilMat = new THREE.MeshStandardMaterial({
-      color: '#1e1b4b',
-      roughness: 0.08,
-      metalness: 0.75,
+    // 1. Irregular Organic Oil Spill Puddles + Splatter Droplets
+    const oilCanvas = document.createElement('canvas');
+    oilCanvas.width = 256;
+    oilCanvas.height = 256;
+    const octx = oilCanvas.getContext('2d')!;
+    octx.fillStyle = '#09090f';
+    octx.fillRect(0, 0, 256, 256);
+    // Subtle iridescent motor-oil rainbow sheen swirls
+    const sheenColors = [
+      'rgba(88, 28, 135, 0.34)',
+      'rgba(15, 118, 110, 0.28)',
+      'rgba(30, 58, 138, 0.32)',
+      'rgba(120, 53, 15, 0.22)',
+    ];
+    for (let s = 0; s < 14; s++) {
+      const gx = 40 + ((s * 53) % 176);
+      const gy = 40 + ((s * 79) % 176);
+      const rad = 32 + (s % 4) * 18;
+      const g = octx.createRadialGradient(gx, gy, 4, gx, gy, rad);
+      g.addColorStop(0, sheenColors[s % sheenColors.length]);
+      g.addColorStop(1, 'rgba(9, 9, 15, 0)');
+      octx.fillStyle = g;
+      octx.beginPath();
+      octx.arc(gx, gy, rad, 0, Math.PI * 2);
+      octx.fill();
+    }
+    const oilTex = new THREE.CanvasTexture(oilCanvas);
+    oilTex.wrapS = THREE.RepeatWrapping;
+    oilTex.wrapT = THREE.RepeatWrapping;
+    oilTex.repeat.set(0.14, 0.14);
+    oilTex.colorSpace = THREE.SRGBColorSpace;
+
+    const oilMat = new THREE.MeshPhysicalMaterial({
+      color: '#111322',
+      map: oilTex,
+      roughness: 0.05,
+      metalness: 0.55,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.04,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
     });
+
+    const createIrregularOilGroup = (seed: number): THREE.Group => {
+      const oilGroup = new THREE.Group();
+      const lobeCount = 22;
+      const pts: THREE.Vector2[] = [];
+      for (let i = 0; i < lobeCount; i++) {
+        const a = (i / lobeCount) * Math.PI * 2;
+        // Multi-harmonic wave produces asymmetric spilled-liquid lobes & fingers
+        const r =
+          2.55 +
+          0.68 * Math.sin(a * 2 + seed * 1.7) +
+          0.54 * Math.cos(a * 3 - seed * 2.3) +
+          0.38 * Math.sin(a * 5 + seed * 3.1) +
+          0.22 * Math.cos(a * 7 - seed * 0.9);
+        pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r));
+      }
+      const spline = new THREE.SplineCurve(pts);
+      const smoothPts = spline.getPoints(64);
+      const mainShape = new THREE.Shape(smoothPts);
+      const mainGeo = new THREE.ExtrudeGeometry(mainShape, {
+        depth: 0.055,
+        bevelEnabled: true,
+        bevelThickness: 0.03,
+        bevelSize: 0.14,
+        bevelSegments: 2,
+        curveSegments: 16,
+      });
+      mainGeo.rotateX(-Math.PI / 2);
+      const mainMesh = new THREE.Mesh(mainGeo, oilMat);
+      oilGroup.add(mainMesh);
+
+      // Detached splash droplets & drips around the spill perimeter
+      const dropCount = 5;
+      for (let d = 0; d < dropCount; d++) {
+        const da = seed * 1.3 + d * ((Math.PI * 2) / dropCount) + Math.sin(d + seed) * 0.35;
+        const dist = 3.25 + ((d * 37 + Math.round(seed * 10)) % 9) * 0.11;
+        const dropR = 0.26 + (d % 3) * 0.14;
+        const dropPts: THREE.Vector2[] = [];
+        for (let k = 0; k < 10; k++) {
+          const ka = (k / 10) * Math.PI * 2;
+          const stretch = 1 + 0.28 * Math.cos(ka - da);
+          const kr = dropR * stretch * (1 + 0.15 * Math.sin(ka * 3 + d));
+          dropPts.push(new THREE.Vector2(Math.cos(ka) * kr, Math.sin(ka) * kr));
+        }
+        const dShape = new THREE.Shape(new THREE.SplineCurve(dropPts).getPoints(20));
+        const dGeo = new THREE.ExtrudeGeometry(dShape, {
+          depth: 0.04,
+          bevelEnabled: true,
+          bevelThickness: 0.02,
+          bevelSize: 0.06,
+          bevelSegments: 1,
+        });
+        dGeo.rotateX(-Math.PI / 2);
+        const dropMesh = new THREE.Mesh(dGeo, oilMat);
+        dropMesh.position.set(Math.cos(da) * dist, 0, Math.sin(da) * dist);
+        oilGroup.add(dropMesh);
+      }
+
+      return oilGroup;
+    };
+
     const oilPairs: readonly (readonly [number, number])[] =
       this.difficulty === 'hard'
         ? [
@@ -1786,14 +2237,19 @@ export class TrackBuilder {
             [0.58, 5.0],
             [0.81, 4.0],
           ];
-    for (const [t, offset] of oilPairs) {
+    for (const [idx, [t, offset]] of oilPairs.entries()) {
       const p = this.curve.getPointAt(t);
       const tan = this.curve.getTangentAt(t).normalize();
       const right = new THREE.Vector3().crossVectors(tan, up).normalize();
-      const pos = p.clone().addScaledVector(right, offset).add(new THREE.Vector3(0, 0.08, 0));
-      const mesh = new THREE.Mesh(oilGeo, oilMat);
-      mesh.position.copy(pos);
-      scene.add(mesh);
+      const roadNormal = new THREE.Vector3().crossVectors(right, tan).normalize();
+      const pos = p.clone().addScaledVector(right, offset).add(new THREE.Vector3(0, 0.06, 0));
+
+      const oilGroup = createIrregularOilGroup(idx * 2.41 + 1.15);
+      oilGroup.position.copy(pos);
+      oilGroup.quaternion.setFromUnitVectors(up, roadNormal);
+      oilGroup.rotateY(idx * 1.1);
+      scene.add(oilGroup);
+
       this.obstacles.push({
         id: id++,
         type: 'oil',
@@ -1801,7 +2257,7 @@ export class TrackBuilder {
         rightVec: right.clone(),
         position: pos,
         radius: 3.1,
-        mesh,
+        mesh: oilGroup,
         respawnTimer: 0,
         phase: 0,
       });
@@ -2002,9 +2458,12 @@ export class TrackBuilder {
     if (this.waterMesh) {
       const mat = this.waterMesh.material as THREE.MeshStandardMaterial;
       if (mat.map) {
-        mat.map.offset.x = timeSec * 0.025;
-        mat.map.offset.y = Math.sin(timeSec * 0.5) * 0.02;
+        mat.map.offset.x = timeSec * 0.035;
+        mat.map.offset.y = timeSec * 0.018 + Math.sin(timeSec * 0.6) * 0.02;
       }
+    }
+    if (this.mapId === 'crash-cove') {
+      this.updateTropicalWaves(timeSec);
     }
     if (this.boostPadMat) {
       this.boostPadMat.emissiveIntensity = 0.55 + Math.sin(timeSec * 8) * 0.25;

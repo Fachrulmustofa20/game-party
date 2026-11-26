@@ -537,15 +537,20 @@ export class SpaceDogfightGame implements PlatformGame {
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
 
-    const steer = Math.max(-1, Math.min(1, diff * 1.8));
-    const aligned = Math.abs(diff) < 0.35;
+    const lvl = bot.player.botLevel ?? 'medium';
+    const steerGain = lvl === 'god' ? 3.1 : lvl === 'hard' ? 2.4 : lvl === 'medium' ? 1.8 : 1.15;
+    const steer = Math.max(-1, Math.min(1, diff * steerGain));
+    const aligned =
+      Math.abs(diff) < (lvl === 'god' ? 0.5 : lvl === 'hard' ? 0.42 : lvl === 'medium' ? 0.35 : 0.22);
+    const dodgeChance = lvl === 'god' ? 0.1 : lvl === 'hard' ? 0.06 : lvl === 'medium' ? 0.03 : 0.008;
+    const fireProb = lvl === 'god' || lvl === 'hard' ? 1.0 : lvl === 'medium' ? 0.65 : 0.3;
     return {
       steer,
       gas: dist > 18,
       brake: false,
-      drift: bot.dodgeCooldown <= 0 && dist < 24 && Math.random() < 0.03,
-      item: aligned && dist < 78,
-      boost: aligned && dist > 45 && bot.boostCooldown <= 0,
+      drift: bot.dodgeCooldown <= 0 && dist < 24 && Math.random() < dodgeChance,
+      item: aligned && dist < 78 && Math.random() < fireProb,
+      boost: lvl !== 'easy' && aligned && dist > 45 && bot.boostCooldown <= 0,
     };
   }
 

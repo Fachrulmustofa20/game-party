@@ -1,4 +1,15 @@
 export type CarStyle = 'sport' | 'formula' | 'monster' | 'buggy' | 'hover' | 'tank';
+export type DriverTheme =
+  | 'batman'
+  | 'spiderman'
+  | 'ironman'
+  | 'captain'
+  | 'thor'
+  | 'hulk'
+  | 'flash'
+  | 'panther'
+  | 'superman'
+  | 'deadpool';
 
 export interface KartCharacterSpec {
   id: string;
@@ -6,6 +17,7 @@ export interface KartCharacterSpec {
   carLabel: string;
   emoji: string;
   carStyle: CarStyle;
+  driverTheme: DriverTheme;
   skin: string;
   outfit: string;
   accent: string;
@@ -14,92 +26,124 @@ export interface KartCharacterSpec {
 
 export const KART_CHARACTERS: KartCharacterSpec[] = [
   {
-    id: 'crash',
-    name: 'Classic Kart',
-    carLabel: 'Klasik Seimbang',
-    emoji: '🏁',
-    carStyle: 'sport',
-    skin: '#f97316',
-    outfit: '#2563eb',
-    accent: '#fde047',
-    earType: 'bandicoot',
-  },
-  {
-    id: 'coco',
-    name: 'Turbo Sport',
-    carLabel: 'Sport Ringan',
-    emoji: '⚡',
-    carStyle: 'sport',
-    skin: '#fb923c',
-    outfit: '#ec4899',
-    accent: '#fef08a',
-    earType: 'ponytail',
-  },
-  {
-    id: 'formula',
-    name: 'Formula F1',
-    carLabel: 'Aerodinamis',
-    emoji: '🏎️',
+    id: 'batman',
+    name: 'Batman',
+    carLabel: 'Bat-Stealth F1',
+    emoji: '🦇',
     carStyle: 'formula',
-    skin: '#e2e8f0',
-    outfit: '#ef4444',
+    driverTheme: 'batman',
+    skin: '#1e293b',
+    outfit: '#0f172a',
+    accent: '#facc15',
+    earType: 'horn',
+  },
+  {
+    id: 'spiderman',
+    name: 'Spiderman',
+    carLabel: 'Web Sport',
+    emoji: '🕷️',
+    carStyle: 'sport',
+    driverTheme: 'spiderman',
+    skin: '#dc2626',
+    outfit: '#1d4ed8',
+    accent: '#f8fafc',
+    earType: 'cortex',
+  },
+  {
+    id: 'ironman',
+    name: 'Iron Man',
+    carLabel: 'Mark Stark F1',
+    emoji: '🤖',
+    carStyle: 'formula',
+    driverTheme: 'ironman',
+    skin: '#b91c1c',
+    outfit: '#dc2626',
     accent: '#facc15',
     earType: 'cortex',
   },
   {
-    id: 'tiny',
-    name: 'Monster Truck',
-    carLabel: 'Bodi Besar',
-    emoji: '🛻',
-    carStyle: 'monster',
-    skin: '#b45309',
-    outfit: '#dc2626',
-    accent: '#fde047',
-    earType: 'horn',
-  },
-  {
-    id: 'polar',
-    name: 'Dune Buggy',
-    carLabel: 'Off-Road',
-    emoji: '🚙',
-    carStyle: 'buggy',
-    skin: '#f8fafc',
-    outfit: '#0284c7',
-    accent: '#38bdf8',
-    earType: 'bear',
-  },
-  {
-    id: 'oxide',
-    name: 'Hover Craft',
-    carLabel: 'Futuristik',
-    emoji: '🛸',
-    carStyle: 'hover',
-    skin: '#22c55e',
-    outfit: '#9333ea',
-    accent: '#38bdf8',
-    earType: 'alien',
-  },
-  {
-    id: 'cortex',
-    name: 'Cyber Hover',
-    carLabel: 'Neon Plasma',
-    emoji: '🚀',
-    carStyle: 'hover',
-    skin: '#facc15',
-    outfit: '#f8fafc',
-    accent: '#0f172a',
-    earType: 'cortex',
-  },
-  {
-    id: 'dingo',
-    name: 'Battle Tank',
-    carLabel: 'Lapis Baja',
+    id: 'captain',
+    name: 'Capt. America',
+    carLabel: 'Shield Tank',
     emoji: '🛡️',
     carStyle: 'tank',
-    skin: '#65a30d',
-    outfit: '#7c2d12',
+    driverTheme: 'captain',
+    skin: '#1d4ed8',
+    outfit: '#1e3a8a',
+    accent: '#ef4444',
+    earType: 'cortex',
+  },
+  {
+    id: 'thor',
+    name: 'Thor',
+    carLabel: 'Thunder Truck',
+    emoji: '🔨',
+    carStyle: 'monster',
+    driverTheme: 'thor',
+    skin: '#fed7aa',
+    outfit: '#1e293b',
+    accent: '#38bdf8',
+    earType: 'horn',
+  },
+  {
+    id: 'hulk',
+    name: 'Hulk',
+    carLabel: 'Gamma Monster',
+    emoji: '💪',
+    carStyle: 'monster',
+    driverTheme: 'hulk',
+    skin: '#16a34a',
+    outfit: '#7e22ce',
+    accent: '#4ade80',
+    earType: 'cortex',
+  },
+  {
+    id: 'flash',
+    name: 'The Flash',
+    carLabel: 'Speedster Sport',
+    emoji: '⚡',
+    carStyle: 'sport',
+    driverTheme: 'flash',
+    skin: '#dc2626',
+    outfit: '#b91c1c',
     accent: '#facc15',
     earType: 'horn',
+  },
+  {
+    id: 'panther',
+    name: 'Black Panther',
+    carLabel: 'Wakanda Hover',
+    emoji: '🐾',
+    carStyle: 'hover',
+    driverTheme: 'panther',
+    skin: '#090d16',
+    outfit: '#111827',
+    accent: '#a855f7',
+    earType: 'horn',
+  },
+  {
+    id: 'superman',
+    name: 'Superman',
+    carLabel: 'Krypton Sport',
+    emoji: '🦸',
+    carStyle: 'sport',
+    driverTheme: 'superman',
+    skin: '#fed7aa',
+    outfit: '#2563eb',
+    accent: '#ef4444',
+    earType: 'cortex',
+  },
+  {
+    id: 'deadpool',
+    name: 'Deadpool',
+    carLabel: 'Merc Buggy',
+    emoji: '⚔️',
+    carStyle: 'buggy',
+    driverTheme: 'deadpool',
+    skin: '#dc2626',
+    outfit: '#b91c1c',
+    accent: '#0f172a',
+    earType: 'cortex',
   },
 ];
 
@@ -109,6 +153,99 @@ export function getKartCharacter(characterId?: string, slot = 0): KartCharacterS
     if (found) return found;
   }
   return KART_CHARACTERS[Math.abs(slot) % KART_CHARACTERS.length];
+}
+
+export function renderHeroPreviewSvg(theme: DriverTheme): string {
+  let inner = '';
+  if (theme === 'batman') {
+    inner = `
+      <polygon points="14,22 18,4 28,16" fill="#0f172a"/>
+      <polygon points="46,22 42,4 32,16" fill="#0f172a"/>
+      <circle cx="30" cy="32" r="18" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+      <path d="M21 39 Q30 47 39 39 L37 47 Q30 51 23 47 Z" fill="#fed7aa"/>
+      <polygon points="18,28 27,31 21,33" fill="#f8fafc"/>
+      <polygon points="42,28 33,31 39,33" fill="#f8fafc"/>
+    `;
+  } else if (theme === 'spiderman') {
+    inner = `
+      <circle cx="30" cy="31" r="18" fill="#dc2626" stroke="#0f172a" stroke-width="2"/>
+      <path d="M30 13 L30 49 M12 31 L48 31 M17 18 L43 44 M43 18 L17 44" stroke="#0f172a" stroke-width="1.3" opacity="0.6"/>
+      <path d="M17 26 Q24 25 27 33 Q20 35 17 26 Z" fill="#ffffff" stroke="#0f172a" stroke-width="1.8"/>
+      <path d="M43 26 Q36 25 33 33 Q40 35 43 26 Z" fill="#ffffff" stroke="#0f172a" stroke-width="1.8"/>
+    `;
+  } else if (theme === 'ironman') {
+    inner = `
+      <circle cx="30" cy="31" r="18" fill="#b91c1c" stroke="#facc15" stroke-width="2"/>
+      <rect x="20" y="19" width="20" height="24" rx="7" fill="#facc15"/>
+      <rect x="21" y="27" width="7" height="3.5" rx="1.5" fill="#38bdf8"/>
+      <rect x="32" y="27" width="7" height="3.5" rx="1.5" fill="#38bdf8"/>
+      <rect x="25" y="38" width="10" height="2.5" rx="1" fill="#7f1d1d"/>
+    `;
+  } else if (theme === 'captain') {
+    inner = `
+      <polygon points="10,27 15,21 15,31" fill="#f8fafc"/>
+      <polygon points="50,27 45,21 45,31" fill="#f8fafc"/>
+      <circle cx="30" cy="31" r="18" fill="#1d4ed8" stroke="#f8fafc" stroke-width="2"/>
+      <path d="M20 38 Q30 47 40 38 L38 47 Q30 51 22 47 Z" fill="#fed7aa"/>
+      <text x="30" y="24" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-weight="900" font-size="11">A</text>
+      <circle cx="24" cy="31" r="2.6" fill="#ffffff"/><circle cx="36" cy="31" r="2.6" fill="#ffffff"/>
+      <circle cx="24" cy="31" r="1.4" fill="#0f172a"/><circle cx="36" cy="31" r="1.4" fill="#0f172a"/>
+    `;
+  } else if (theme === 'thor') {
+    inner = `
+      <polygon points="8,24 16,10 18,27" fill="#cbd5e1" stroke="#64748b" stroke-width="1"/>
+      <polygon points="52,24 44,10 42,27" fill="#cbd5e1" stroke="#64748b" stroke-width="1"/>
+      <circle cx="30" cy="32" r="17" fill="#fed7aa"/>
+      <path d="M12 30 Q30 10 48 30 Z" fill="#94a3b8" stroke="#e2e8f0" stroke-width="1.5"/>
+      <circle cx="24" cy="33" r="2.5" fill="#0f172a"/><circle cx="36" cy="33" r="2.5" fill="#0f172a"/>
+      <path d="M22 42 Q30 48 38 42" fill="none" stroke="#eab308" stroke-width="4" stroke-linecap="round"/>
+    `;
+  } else if (theme === 'hulk') {
+    inner = `
+      <circle cx="30" cy="32" r="18" fill="#16a34a" stroke="#14532d" stroke-width="2"/>
+      <path d="M13 26 Q22 10 30 15 Q38 10 47 26 Q38 20 30 22 Q22 20 13 26 Z" fill="#0f172a"/>
+      <line x1="20" y1="27" x2="27" y2="30" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="40" y1="27" x2="33" y2="30" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="24" cy="32" r="2.3" fill="#0f172a"/><circle cx="36" cy="32" r="2.3" fill="#0f172a"/>
+      <rect x="23" y="40" width="14" height="4" rx="2" fill="#ffffff" stroke="#0f172a" stroke-width="1.2"/>
+    `;
+  } else if (theme === 'flash') {
+    inner = `
+      <polygon points="9,22 16,28 11,33" fill="#facc15"/>
+      <polygon points="51,22 44,28 49,33" fill="#facc15"/>
+      <circle cx="30" cy="31" r="18" fill="#dc2626" stroke="#facc15" stroke-width="2"/>
+      <path d="M21 38 Q30 47 39 38 L37 46 Q30 50 23 46 Z" fill="#fed7aa"/>
+      <circle cx="24" cy="30" r="2.6" fill="#ffffff"/><circle cx="36" cy="30" r="2.6" fill="#ffffff"/>
+      <circle cx="24" cy="30" r="1.4" fill="#0f172a"/><circle cx="36" cy="30" r="1.4" fill="#0f172a"/>
+    `;
+  } else if (theme === 'superman') {
+    inner = `
+      <circle cx="30" cy="32" r="17" fill="#fed7aa"/>
+      <path d="M13 28 Q20 11 32 14 Q44 12 47 28 Q37 19 29 22 Q22 19 13 28 Z" fill="#0f172a"/>
+      <path d="M29 20 Q25 27 30 29" fill="none" stroke="#0f172a" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="24" cy="33" r="2.5" fill="#0f172a"/><circle cx="36" cy="33" r="2.5" fill="#0f172a"/>
+      <path d="M25 41 Q30 44 35 41" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round"/>
+    `;
+  } else if (theme === 'deadpool') {
+    inner = `
+      <circle cx="30" cy="31" r="18" fill="#dc2626" stroke="#0f172a" stroke-width="2"/>
+      <ellipse cx="22" cy="30" rx="6" ry="8" transform="rotate(-14 22 30)" fill="#0f172a"/>
+      <ellipse cx="38" cy="30" rx="6" ry="8" transform="rotate(14 38 30)" fill="#0f172a"/>
+      <ellipse cx="22" cy="30" rx="3.4" ry="2.2" transform="rotate(-14 22 30)" fill="#ffffff"/>
+      <ellipse cx="38" cy="30" rx="3.4" ry="2.2" transform="rotate(14 38 30)" fill="#ffffff"/>
+    `;
+  } else {
+    // Black Panther
+    inner = `
+      <polygon points="15,22 19,7 27,17" fill="#090d16" stroke="#a855f7" stroke-width="1.2"/>
+      <polygon points="45,22 41,7 33,17" fill="#090d16" stroke="#a855f7" stroke-width="1.2"/>
+      <circle cx="30" cy="32" r="18" fill="#090d16" stroke="#a855f7" stroke-width="2"/>
+      <polygon points="18,29 27,32 21,34" fill="#c084fc"/>
+      <polygon points="42,29 33,32 39,34" fill="#c084fc"/>
+      <path d="M22 42 L30 39 L38 42" fill="none" stroke="#94a3b8" stroke-width="1.6"/>
+    `;
+  }
+  return `<svg class="hero-preview-svg" viewBox="0 0 60 56" aria-hidden="true">${inner}</svg>`;
 }
 
 export function renderCarPreviewSvg(carStyle: CarStyle, bodyColor: string, accentColor: string): string {

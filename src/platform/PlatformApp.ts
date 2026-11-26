@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { RefreshCw, createElement } from 'lucide';
 import { ControllerInputState } from '../net/BinaryProtocol';
 import { ConnectedPlayer, HostNetworkManager } from '../net/HostNetworkManager';
-import { HostSDKContext, PlatformGame, PlatformPlayer, TrackMapId } from '../sdk/GameSDK';
+import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer, TrackMapId } from '../sdk/GameSDK';
 import { KART_CHARACTERS, getKartCharacter } from '../sdk/KartCharacters';
 import { KartGame } from '../games/kart/KartGame';
 import { SpaceDogfightGame } from '../games/dogfight/SpaceDogfightGame';
@@ -30,6 +30,7 @@ export class PlatformApp {
   private lanInterfaceName = '';
   private remotePlayers: ConnectedPlayer[] = [];
   private bots: PlatformPlayer[] = [];
+  private botLevel: BotLevel = 'medium';
   private activeGame: PlatformGame | null = null;
   private games: PlatformGame[] = [new KartGame(), new SpaceDogfightGame()];
   private selectedGame: PlatformGame = this.games[0];
@@ -60,6 +61,7 @@ export class PlatformApp {
         this.roomCode = code;
         localStorage.setItem(ROOM_STORAGE_KEY, code);
         this.updateQrAndRoom();
+        this.syncBotsToServer();
       },
       onPlayersChanged: (players) => {
         this.remotePlayers = players;
@@ -191,19 +193,27 @@ export class PlatformApp {
       });
     }
 
+    const usedChars = new Set(
+      activeHumans.map((p) => p.characterId).filter((c): c is string => Boolean(c))
+    );
     const needed = Math.max(0, cappedTarget - usedSlots.size);
     for (let i = 0; i < needed; i++) {
       let slot = 0;
       while (usedSlots.has(slot) && slot < maxSlots) slot++;
       if (slot >= maxSlots) break;
       usedSlots.add(slot);
+      const freeChar =
+        KART_CHARACTERS.find((c) => !usedChars.has(c.id)) ??
+        KART_CHARACTERS[slot % KART_CHARACTERS.length];
+      usedChars.add(freeChar.id);
       this.bots.push({
         id: `bot_${i + 1}`,
         slot,
         name: `Bot ${i + 1}`,
         color: BOT_COLORS[slot % BOT_COLORS.length],
-        characterId: KART_CHARACTERS[slot % KART_CHARACTERS.length].id,
+        characterId: freeChar.id,
         isBot: true,
+        botLevel: this.botLevel,
         connected: true,
         transport: 'bot',
         pingMs: 0,
@@ -260,9 +270,30 @@ export class PlatformApp {
 
         <main class="hub-main">
           <div>
-            <div class="section-header" style="margin-bottom:12px;">
+            <div class="section-header" style="margin-bottom:12px;flex-wrap:wrap;gap:10px;">
               <h2 class="section-title">Pemain Terhubung (<span id="player-count">0</span> / <span id="player-max-count">${this.selectedGame.maxPlayers}</span>)</h2>
-              <span style="font-size:12px;color:var(--muted);">UDP DataChannel + 8-Byte Binary</span>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div id="ai-level-bar" class="ai-level-bar" style="display:none;">
+                  <span style="font-size:12px;color:var(--muted);font-weight:700;">Level AI:</span>
+                  ${(
+                    [
+                      ['easy', 'Mudah'],
+                      ['medium', 'Sedang'],
+                      ['hard', 'Sulit'],
+                      ['god', 'Dewa'],
+                    ] as const
+                  )
+                    .map(
+                      ([lvl, label]) => `
+                    <button type="button" data-ai-level="${lvl}" class="btn ai-level-btn ${
+                        this.botLevel === lvl ? 'btn-primary' : 'btn-secondary'
+                      }">${label}</button>
+                  `
+                    )
+                    .join('')}
+                </div>
+                <span style="font-size:12px;color:var(--muted);">UDP DataChannel + 8-Byte Binary</span>
+              </div>
             </div>
             <div class="players-grid" id="players-grid"></div>
           </div>
@@ -304,6 +335,17 @@ export class PlatformApp {
     this.root.querySelector('#btn-clear-bots')?.addEventListener('click', () => {
       this.bots = [];
       this.renderPlayersGrid();
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const nextLevel = (btn.dataset.aiLevel || 'medium') as BotLevel;
+        this.botLevel = nextLevel;
+        this.bots = this.bots.map((b) => (b.isBot ? { ...b, botLevel: nextLevel } : b));
+        this.root.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((b) => {
+          b.className = `btn ai-level-btn ${b.dataset.aiLevel === nextLevel ? 'btn-primary' : 'btn-secondary'}`;
+        });
+        this.renderPlayersGrid();
+      });
     });
 
     const gamesGrid = this.root.querySelector('#games-grid')!;
@@ -440,7 +482,15 @@ export class PlatformApp {
     }
   }
 
+  private syncBotsToServer(): void {
+    const botChars = this.bots
+      .map((b) => b.characterId)
+      .filter((c): c is string => Boolean(c));
+    this.net.syncBotCharacters(botChars);
+  }
+
   private renderPlayersGrid(): void {
+    this.syncBotsToServer();
     if (!this.playersGridEl) return;
     const maxSlots = this.getSlotLimit();
     const merged = this.getMergedPlayers(maxSlots);
@@ -451,6 +501,20 @@ export class PlatformApp {
       maxSlots <= 2 ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))';
 
     const bySlot = new Map(merged.map((p) => [p.slot, p]));
+    const hasAi = merged.some((p) => p.isBot);
+    const aiLevelBar = this.root.querySelector('#ai-level-bar') as HTMLElement | null;
+    if (aiLevelBar) {
+      aiLevelBar.style.display = hasAi ? 'flex' : 'none';
+    }
+    const aiLevelLabel =
+      this.botLevel === 'god'
+        ? 'Dewa'
+        : this.botLevel === 'hard'
+        ? 'Sulit'
+        : this.botLevel === 'easy'
+        ? 'Mudah'
+        : 'Sedang';
+
     this.playersGridEl.innerHTML = '';
 
     for (let slot = 0; slot < maxSlots; slot++) {
@@ -469,7 +533,7 @@ export class PlatformApp {
             : p.transport === 'webrtc'
             ? 'WebRTC P2P'
             : p.transport === 'bot'
-            ? 'AI Bot'
+            ? `AI Bot • ${aiLevelLabel}`
             : p.transport === 'ws-fallback'
             ? 'WS Relay'
             : 'Connecting...';
@@ -479,7 +543,7 @@ export class PlatformApp {
         cell.innerHTML = `
           <div class="slot-top">
             <span class="color-dot" style="background:${p.color};"></span>
-            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${charSpec.emoji} P${slot + 1} ${p.name}</span>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">P${slot + 1} ${p.name}</span>
             <button type="button" class="slot-delete-btn" title="Hapus ${p.name}" aria-label="Hapus ${p.name}">✕</button>
           </div>
           <div style="font-size:11px;color:var(--muted);">${charSpec.name}</div>
@@ -531,6 +595,7 @@ export class PlatformApp {
           name: `Bot ${i + 1}`,
           color: BOT_COLORS[i + 1],
           isBot: true,
+          botLevel: this.botLevel,
           connected: true,
           transport: 'bot' as const,
           pingMs: 0,
