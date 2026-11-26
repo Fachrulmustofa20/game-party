@@ -1,3 +1,5 @@
+import { AudioFrameContext, GameAudioEngine } from './GameAudioEngine';
+
 /**
  * Zero-asset Web Audio API synthesizer for arcade kart engine revving,
  * turbo boost whoosh, and countdown beeps.
@@ -9,7 +11,8 @@ interface EngineVoice {
   filter: BiquadFilterNode;
 }
 
-export class KartAudioEngine {
+export class KartAudioEngine implements GameAudioEngine {
+  readonly id = 'nitro-kart-3d';
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private voices = new Map<string, EngineVoice>();
@@ -38,6 +41,16 @@ export class KartAudioEngine {
 
   isMuted(): boolean {
     return this.muted;
+  }
+
+  updateFromController(ctx: AudioFrameContext): void {
+    this.updatePlayerEngine(
+      'self',
+      ctx.slot,
+      ctx.input.gas,
+      ctx.speedKmh / 120,
+      ctx.input.boost
+    );
   }
 
   updatePlayerEngine(

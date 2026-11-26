@@ -39,6 +39,7 @@ interface Room {
   hostWs: WebSocket | null;
   players: Map<string, PlayerSession>;
   botCharacters: string[];
+  selectedGameId: string;
   createdAt: number;
 }
 
@@ -144,8 +145,9 @@ const server = http.createServer((req, res) => {
     const room = rooms.get(code);
     const exists = Boolean(room && room.hostWs);
     const takenCharacters = exists && room ? getTakenCharacters(room) : [];
+    const selectedGameId = exists && room ? room.selectedGameId : 'nitro-kart-3d';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ exists, takenCharacters }));
+    res.end(JSON.stringify({ exists, takenCharacters, selectedGameId }));
     return;
   }
 
@@ -235,6 +237,7 @@ wss.on('connection', (ws) => {
         hostWs: ws,
         players: new Map(),
         botCharacters: [],
+        selectedGameId: 'nitro-kart-3d',
         createdAt: Date.now(),
       });
       sendJson(ws, { type: 'room_created', roomCode: code });
@@ -377,6 +380,15 @@ wss.on('connection', (ws) => {
             .filter((c): c is string => typeof c === 'string' && c.length > 0)
             .map((c) => c.slice(0, 24))
         : [];
+      return;
+    }
+
+    if (type === 'sync_selected_game' && roomCode && role === 'host') {
+      const room = rooms.get(roomCode);
+      if (!room) return;
+      if (typeof msg.gameId === 'string' && msg.gameId.trim().length > 0) {
+        room.selectedGameId = msg.gameId.trim().slice(0, 48);
+      }
       return;
     }
 

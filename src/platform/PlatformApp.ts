@@ -4,6 +4,7 @@ import { ControllerInputState } from '../net/BinaryProtocol';
 import { ConnectedPlayer, HostNetworkManager } from '../net/HostNetworkManager';
 import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer, TrackMapId } from '../sdk/GameSDK';
 import { KART_CHARACTERS, getKartCharacter } from '../sdk/KartCharacters';
+import { SPACE_CHARACTERS, getSpaceCharacter } from '../sdk/SpaceCharacters';
 import { KartGame } from '../games/kart/KartGame';
 import { SpaceDogfightGame } from '../games/dogfight/SpaceDogfightGame';
 
@@ -61,12 +62,20 @@ export class PlatformApp {
         this.roomCode = code;
         localStorage.setItem(ROOM_STORAGE_KEY, code);
         this.updateQrAndRoom();
+        this.net.syncSelectedGame(this.selectedGame.id);
         this.syncBotsToServer();
       },
       onPlayersChanged: (players) => {
         this.remotePlayers = players;
         if (players.some((p) => p.connected)) {
           this.bots = this.bots.filter((b) => b.id !== 'local_p1');
+        }
+        if (this.activeGame) {
+          this.net.sendReliableEvent('*', {
+            type: 'game_started',
+            gameId: this.activeGame.id,
+            layout: this.activeGame.controllerLayout,
+          });
         }
         this.renderPlayersGrid();
       },
@@ -177,6 +186,8 @@ export class PlatformApp {
     const usedSlots = new Set(activeHumans.map((p, idx) => (p.slot < maxSlots ? p.slot : idx)));
     this.bots = [];
 
+    const roster = this.getActiveRoster();
+
     // If no phone controllers are connected, assign Slot 0 to PC Keyboard (P1) so user can play vs AI
     if (activeHumans.length === 0 && cappedTarget >= 1) {
       usedSlots.add(0);
@@ -185,7 +196,7 @@ export class PlatformApp {
         slot: 0,
         name: 'PC Driver',
         color: BOT_COLORS[0],
-        characterId: KART_CHARACTERS[0].id,
+        characterId: roster[0].id,
         isBot: false,
         connected: true,
         transport: 'bot',
@@ -203,8 +214,8 @@ export class PlatformApp {
       if (slot >= maxSlots) break;
       usedSlots.add(slot);
       const freeChar =
-        KART_CHARACTERS.find((c) => !usedChars.has(c.id)) ??
-        KART_CHARACTERS[slot % KART_CHARACTERS.length];
+        roster.find((c) => !usedChars.has(c.id)) ??
+        roster[slot % roster.length];
       usedChars.add(freeChar.id);
       this.bots.push({
         id: `bot_${i + 1}`,
@@ -220,6 +231,36 @@ export class PlatformApp {
       });
     }
     this.renderPlayersGrid();
+  }
+
+  private getActiveRoster(): ReadonlyArray<{ id: string; name: string }> {
+    const gameId = (this.activeGame ?? this.selectedGame).id;
+    return gameId === 'space-dogfight-2p' ? SPACE_CHARACTERS : KART_CHARACTERS;
+  }
+
+  private getCharacterDisplayName(characterId: string | undefined, slot: number): string {
+    const gameId = (this.activeGame ?? this.selectedGame).id;
+    return gameId === 'space-dogfight-2p'
+      ? getSpaceCharacter(characterId, slot).name
+      : getKartCharacter(characterId, slot).name;
+  }
+
+  private remapBotsToActiveRoster(): void {
+    const roster = this.getActiveRoster();
+    const used = new Set(
+      this.remotePlayers
+        .filter((p) => p.connected)
+        .map((p) => p.characterId)
+        .filter((c): c is string => Boolean(c))
+    );
+    for (const bot of this.bots) {
+      const valid = bot.characterId && roster.some((c) => c.id === bot.characterId);
+      if (!valid || used.has(bot.characterId!)) {
+        const free = roster.find((c) => !used.has(c.id)) ?? roster[bot.slot % roster.length];
+        bot.characterId = free.id;
+      }
+      if (bot.characterId) used.add(bot.characterId);
+    }
   }
 
   private renderHub(): void {
@@ -451,6 +492,8 @@ export class PlatformApp {
         this.selectedGame = game;
         gamesGrid.querySelectorAll('.game-card').forEach((c) => c.classList.remove('selected'));
         card.classList.add('selected');
+        this.net.syncSelectedGame(game.id);
+        this.remapBotsToActiveRoster();
         this.syncSlotLimitUi();
         this.renderPlayersGrid();
       });
@@ -538,7 +581,7 @@ export class PlatformApp {
             ? 'WS Relay'
             : 'Connecting...';
         const pingLabel = p.isBot ? '0 ms' : `${p.pingMs} ms`;
-        const charSpec = getKartCharacter(p.characterId, slot);
+        const charName = this.getCharacterDisplayName(p.characterId, slot);
 
         cell.innerHTML = `
           <div class="slot-top">
@@ -546,7 +589,7 @@ export class PlatformApp {
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">P${slot + 1} ${p.name}</span>
             <button type="button" class="slot-delete-btn" title="Hapus ${p.name}" aria-label="Hapus ${p.name}">✕</button>
           </div>
-          <div style="font-size:11px;color:var(--muted);">${charSpec.name}</div>
+          <div style="font-size:11px;color:var(--muted);">${charName}</div>
           <div class="slot-meta">
             <span class="${badgeClass}">${badgeLabel}</span>
             <span>${pingLabel}</span>
@@ -572,8 +615,10 @@ export class PlatformApp {
 
   private launchGame(game: PlatformGame): void {
     this.selectedGame = game;
+    this.net.syncSelectedGame(game.id);
     const maxSlots = game.maxPlayers;
     const current = this.getMergedPlayers(maxSlots);
+    const roster = this.getActiveRoster();
 
     // Ensure at least 1 local player + bots up to game capacity (max 4 default for 10P, 2 for 2P)
     if (current.length === 0) {
@@ -584,6 +629,7 @@ export class PlatformApp {
           slot: 0,
           name: 'PC Driver',
           color: BOT_COLORS[0],
+          characterId: roster[0].id,
           isBot: false,
           connected: true,
           transport: 'bot',
@@ -594,6 +640,7 @@ export class PlatformApp {
           slot: i + 1,
           name: `Bot ${i + 1}`,
           color: BOT_COLORS[i + 1],
+          characterId: roster[(i + 1) % roster.length].id,
           isBot: true,
           botLevel: this.botLevel,
           connected: true,
@@ -601,6 +648,7 @@ export class PlatformApp {
           pingMs: 0,
         })),
       ];
+      this.syncBotsToServer();
     } else if (current.length < game.minPlayers) {
       this.addBotsToFill(game.minPlayers);
     }
