@@ -1,6 +1,6 @@
 # Panduan Step-by-Step: Membuat Game Baru & Custom Controller
 
-Dokumen ini menjelaskan cara menambahkan game baru ke **Nitro Party Platform** beserta cara membuat **Custom Controller** khusus untuk game tersebut (atau menggunakan `DefaultController` bawaan).
+Dokumen ini menjelaskan cara menambahkan game baru ke **Gaming Party Platform** beserta cara membuat **Custom Controller** khusus untuk game tersebut (atau menggunakan `DefaultController` bawaan).
 
 ---
 

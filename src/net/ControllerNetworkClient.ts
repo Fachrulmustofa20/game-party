@@ -12,11 +12,18 @@ import {
 import { TransportMode } from './HostNetworkManager';
 
 export interface ControllerNetworkCallbacks {
-  onJoined: (info: { playerId: string; slot: number; roomCode: string }) => void;
+  onJoined: (info: {
+    playerId: string;
+    slot: number;
+    roomCode: string;
+    selectedGameId?: string;
+    characterId?: string;
+  }) => void;
   onTransportChanged: (mode: TransportMode) => void;
   onReliableEvent: (event: Record<string, unknown>) => void;
   onTelemetry: (telemetry: TelemetryPacket) => void;
   onError: (message: string, takenCharacters?: string[]) => void;
+  onRoomClosed?: () => void;
 }
 
 export class ControllerNetworkClient {
@@ -81,12 +88,20 @@ export class ControllerNetworkClient {
           playerId: String(msg.playerId),
           slot: Number(msg.slot),
           roomCode: String(msg.roomCode),
+          selectedGameId: typeof msg.selectedGameId === 'string' ? msg.selectedGameId : undefined,
+          characterId: typeof msg.characterId === 'string' ? msg.characterId : undefined,
         });
         this.startFallbackTimer();
       } else if (msg.type === 'signal') {
         this.handleSignal(msg.signal as Record<string, unknown>);
       } else if (msg.type === 'relay_event') {
         this.callbacks.onReliableEvent((msg.payload as Record<string, unknown>) || {});
+      } else if (msg.type === 'room_closed') {
+        if (this.callbacks.onRoomClosed) {
+          this.callbacks.onRoomClosed();
+        } else {
+          this.callbacks.onError('Room ditutup oleh Host.');
+        }
       } else if (msg.type === 'host_disconnected') {
         this.callbacks.onError('Host PC terputus. Silakan refresh atau scan ulang QR Code.');
       }
@@ -228,6 +243,18 @@ export class ControllerNetworkClient {
     }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(buf);
+    }
+  }
+
+  selectCharacter(characterId: string, color: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'select_character', characterId, color }));
+    }
+  }
+
+  setReady(ready: boolean): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'set_ready', ready }));
     }
   }
 

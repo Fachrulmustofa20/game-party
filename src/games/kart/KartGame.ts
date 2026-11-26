@@ -26,7 +26,7 @@ export class KartGame implements PlatformGame {
   title = 'Nitro Kart 3D (CTR Edition)';
   subtitle =
     'Balapan 3D HD ala Crash Team Racing untuk 1–10 pemain! Karakter CTR unik, Crash Cove Island, 3-Stage Turbo Boost, dan Hybrid Split-Screen / Stadium Camera.';
-  badge = 'GAME UTAMA • 3D HD RACING';
+  badge = '1-10 PLAYER • 3D HD RACING';
   accentColor = '#ff6b2b';
   coverImage = '/images/nitro-kart-cover.png';
   minPlayers = 1;
@@ -66,11 +66,16 @@ export class KartGame implements PlatformGame {
   private countdownEl: HTMLElement | null = null;
   private startLayerEl: HTMLElement | null = null;
   private finishLayerEl: HTMLElement | null = null;
+  private itemLayerEl: HTMLElement | null = null;
   private resultsEl: HTMLElement | null = null;
   private leaderboardEl: HTMLElement | null = null;
   private minimapCanvas: HTMLCanvasElement | null = null;
+  private splitMinimapLayerEl: HTMLElement | null = null;
+  private splitMinimaps: { slot: number; canvas: HTMLCanvasElement }[] = [];
+  private lastSplitMinimapKey = '';
   private warningEl: HTMLElement | null = null;
   private finishShownForSlots = new Set<number>();
+  private lastItemHudKey = '';
   private finishResultsTimeout: number | null = null;
   private frustum = new THREE.Frustum();
   private projScreenMatrix = new THREE.Matrix4();
@@ -94,6 +99,9 @@ export class KartGame implements PlatformGame {
     this.racePhase = 'countdown';
     this.countdownTimer = 3.5;
     this.finishShownForSlots.clear();
+    this.lastItemHudKey = '';
+    this.lastSplitMinimapKey = '';
+    this.splitMinimaps = [];
     if (this.finishResultsTimeout !== null) {
       clearTimeout(this.finishResultsTimeout);
       this.finishResultsTimeout = null;
@@ -269,6 +277,7 @@ export class KartGame implements PlatformGame {
         headGroup,
         steerWheel,
         wrongWaySprite,
+        nameplateSprite,
       });
 
       const splitFov = players.length >= 5 ? 76 : 68;
@@ -346,6 +355,12 @@ export class KartGame implements PlatformGame {
     container.appendChild(finishLayer);
     this.finishLayerEl = finishLayer;
 
+    const itemLayer = document.createElement('div');
+    itemLayer.style.cssText =
+      'position:absolute;inset:0;z-index:25;pointer-events:none;overflow:hidden;';
+    container.appendChild(itemLayer);
+    this.itemLayerEl = itemLayer;
+
     const res = document.createElement('div');
     res.style.cssText =
       'position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:40;background:rgba(8,12,23,0.82);backdrop-filter:blur(8px);';
@@ -368,9 +383,15 @@ export class KartGame implements PlatformGame {
     mm.width = 176;
     mm.height = 144;
     mm.style.cssText =
-      'position:absolute;top:62px;left:14px;z-index:25;background:rgba(8,12,23,0.78);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:14px;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+      'position:absolute;top:62px;left:14px;z-index:25;background:rgba(8,12,23,0.42);opacity:0.82;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.16);border-radius:14px;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,0.3);';
     container.appendChild(mm);
     this.minimapCanvas = mm;
+
+    const splitMmLayer = document.createElement('div');
+    splitMmLayer.style.cssText =
+      'position:absolute;inset:0;z-index:25;pointer-events:none;overflow:hidden;';
+    container.appendChild(splitMmLayer);
+    this.splitMinimapLayerEl = splitMmLayer;
 
     const warn = document.createElement('div');
     warn.style.cssText =
@@ -807,6 +828,7 @@ export class KartGame implements PlatformGame {
       this.sendAllTelemetry();
       this.updateLeaderboard(sorted);
       this.updateOffCameraWarnings(useSplit);
+      this.updateItemHud(useSplit, splitTargets);
       const leadLap = Math.min(this.maxLaps, sorted[0]?.lap ?? 1);
       if (this.lapHudEl) this.lapHudEl.textContent = `LAP ${leadLap} / ${this.maxLaps}`;
     }
@@ -832,6 +854,86 @@ export class KartGame implements PlatformGame {
         this.finishRace(sorted);
       }
     }
+  }
+
+  private updateItemHud(useSplit: boolean, splitTargets: KartState[]): void {
+    if (!this.itemLayerEl) return;
+    if (!useSplit || splitTargets.length < 1 || splitTargets.length > 4) {
+      if (this.lastItemHudKey !== 'hidden') {
+        this.lastItemHudKey = 'hidden';
+        this.itemLayerEl.innerHTML = '';
+      }
+      return;
+    }
+
+    const key = splitTargets
+      .map((k) => {
+        const boostState =
+          k.turboReserve > 0
+            ? 'active'
+            : (k.boostCooldown ?? 0) <= 0 || k.turboCharge >= 50
+            ? 'ready'
+            : 'off';
+        return `${k.slot}:${k.heldItem}:${boostState}`;
+      })
+      .join('|');
+    if (key === this.lastItemHudKey) return;
+    this.lastItemHudKey = key;
+
+    const ITEM_DISPLAY: Record<number, { icon: string; name: string }> = {
+      1: { icon: '🚀', name: 'ROKET' },
+      2: { icon: '💣', name: 'BOM' },
+      3: { icon: '🧨', name: 'TNT' },
+      4: { icon: '🛡️', name: 'SHIELD' },
+      5: { icon: '⚡', name: 'TURBO' },
+    };
+
+    const count = splitTargets.length;
+    const cols = count === 1 ? 1 : 2;
+    const rows = Math.ceil(count / cols);
+
+    this.itemLayerEl.innerHTML = '';
+    splitTargets.forEach((kart, index) => {
+      const item = ITEM_DISPLAY[kart.heldItem];
+      const boostActive = kart.turboReserve > 0;
+      const boostReady = (kart.boostCooldown ?? 0) <= 0 || kart.turboCharge >= 50;
+      if (!item && !boostActive && !boostReady) return;
+
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+
+      const cell = document.createElement('div');
+      cell.style.cssText = `position:absolute;left:${(col / cols) * 100}%;top:${(row / rows) * 100}%;width:${100 / cols}%;height:${100 / rows}%;pointer-events:none;`;
+
+      const stack = document.createElement('div');
+      stack.className = 'kart-left-hud-stack';
+
+      if (item) {
+        const box = document.createElement('div');
+        box.className = 'kart-item-hud';
+        box.style.setProperty('--player-color', kart.color);
+        box.innerHTML = `
+          <div class="kart-item-hud-player">P${kart.slot + 1}</div>
+          <div class="kart-item-hud-icon">${item.icon}</div>
+          <div class="kart-item-hud-name">${item.name}</div>
+        `;
+        stack.appendChild(box);
+      }
+
+      if (boostActive || boostReady) {
+        const boostBox = document.createElement('div');
+        boostBox.className = `kart-item-hud kart-boost-hud ${boostActive ? 'is-active' : 'is-ready'}`;
+        boostBox.innerHTML = `
+          <div class="kart-item-hud-player" style="color:${boostActive ? '#fde047' : '#fbbf24'};">P${kart.slot + 1}</div>
+          <div class="kart-item-hud-icon">${boostActive ? '⚡' : '🔥'}</div>
+          <div class="kart-item-hud-name">${boostActive ? 'BOOST AKTIF' : 'BOOST SIAP'}</div>
+        `;
+        stack.appendChild(boostBox);
+      }
+
+      cell.appendChild(stack);
+      this.itemLayerEl?.appendChild(cell);
+    });
   }
 
   private getSplitTargets(): KartState[] {
@@ -930,12 +1032,14 @@ export class KartGame implements PlatformGame {
     if (!this.resultsEl) return;
 
     const winner = sorted[0];
+    const winnerTime = winner?.finished ? winner.finishTime : this.raceTime;
     const rowsHtml = sorted
       .map((k, i) => {
+        const finishSec = (k.finished ? k.finishTime : this.raceTime).toFixed(1);
         const status = k.eliminated
           ? '<span style="color:#ef4444;font-weight:800;">ELIMINATED</span>'
           : i === 0
-          ? '<span style="color:#facc15;font-weight:900;">🏆 MENANG!</span>'
+          ? `<span style="color:#facc15;font-weight:900;">🏆 MENANG! • ${finishSec}s</span>`
           : k.finished
           ? `<span style="color:#22c55e;">${k.finishTime.toFixed(1)}s</span>`
           : '<span style="color:var(--muted);">KALAH</span>';
@@ -955,6 +1059,7 @@ export class KartGame implements PlatformGame {
         <div style="text-align:center;">
           <div style="font-size:13px;color:var(--accent-2);font-weight:800;">BALAPAN SELESAI</div>
           <h2 style="margin:4px 0;font-size:28px;font-weight:900;">🏆 ${winner?.name ?? 'Juara'} Menang!</h2>
+          <div style="font-size:13px;color:#facc15;font-weight:800;">Waktu: ${winnerTime.toFixed(1)}s</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;">
           ${rowsHtml}
@@ -1270,6 +1375,10 @@ export class KartGame implements PlatformGame {
           k.mesh.rotation.y = interpHead + visualDriftYaw;
           k.mesh.rotation.z = 0;
         }
+        if (k.nameplateSprite) {
+          k.nameplateSprite.visible =
+            !k.eliminated && Math.floor(performance.now() / 5000) % 2 === 0;
+        }
       }
     }
 
@@ -1352,13 +1461,64 @@ export class KartGame implements PlatformGame {
   }
 
   private renderMinimap(): void {
-    if (!this.minimapCanvas || !this.track) return;
-    const ctx = this.minimapCanvas.getContext('2d');
+    if (!this.track) return;
+    const splitTargets = this.getSplitTargets();
+    const useSplit = this.forceSplitScreen || splitTargets.length <= 4;
+
+    if (useSplit && splitTargets.length >= 1 && splitTargets.length <= 4 && this.splitMinimapLayerEl) {
+      if (this.minimapCanvas) this.minimapCanvas.style.display = 'none';
+      const count = splitTargets.length;
+      const key = `${count}:${splitTargets.map((k) => k.slot).join(',')}`;
+      if (key !== this.lastSplitMinimapKey) {
+        this.lastSplitMinimapKey = key;
+        this.splitMinimapLayerEl.innerHTML = '';
+        this.splitMinimaps = [];
+        const cols = count === 1 ? 1 : 2;
+        const rows = Math.ceil(count / cols);
+        const mmW = count === 1 ? 176 : 132;
+        const mmH = count === 1 ? 144 : 108;
+
+        splitTargets.forEach((kart, index) => {
+          const col = index % cols;
+          const row = Math.floor(index / cols);
+          const cell = document.createElement('div');
+          cell.style.cssText = `position:absolute;left:${(col / cols) * 100}%;top:${(row / rows) * 100}%;width:${100 / cols}%;height:${100 / rows}%;pointer-events:none;`;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = mmW;
+          canvas.height = mmH;
+          canvas.style.cssText = `position:absolute;top:${row === 0 ? 62 : 12}px;left:14px;background:rgba(8,12,23,0.42);opacity:0.82;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.16);border-radius:12px;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,0.3);`;
+          cell.appendChild(canvas);
+          this.splitMinimapLayerEl?.appendChild(cell);
+          this.splitMinimaps.push({ slot: kart.slot, canvas });
+        });
+      }
+
+      for (const item of this.splitMinimaps) {
+        this.drawMinimapToCanvas(item.canvas, item.slot);
+      }
+      return;
+    }
+
+    if (this.splitMinimapLayerEl && this.lastSplitMinimapKey !== '') {
+      this.lastSplitMinimapKey = '';
+      this.splitMinimapLayerEl.innerHTML = '';
+      this.splitMinimaps = [];
+    }
+    if (this.minimapCanvas) {
+      this.minimapCanvas.style.display = 'block';
+      this.drawMinimapToCanvas(this.minimapCanvas);
+    }
+  }
+
+  private drawMinimapToCanvas(canvas: HTMLCanvasElement, focusSlot?: number): void {
+    if (!this.track) return;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const w = this.minimapCanvas.width;
-    const h = this.minimapCanvas.height;
-    const pad = 14;
+    const w = canvas.width;
+    const h = canvas.height;
+    const pad = 12;
     const { minX, maxX, minZ, maxZ } = this.track.bounds;
     const spanX = maxX - minX || 1;
     const spanZ = maxZ - minZ || 1;
@@ -1399,14 +1559,15 @@ export class KartGame implements PlatformGame {
       if (k.eliminated) continue;
       const kx = toX(k.position.x);
       const ky = toY(k.position.z);
-      const r = k.rank === 1 ? 5.2 : 4.2;
+      const isFocused = focusSlot !== undefined && k.slot === focusSlot;
+      const r = isFocused ? 5.6 : k.rank === 1 ? 5.0 : 4.0;
 
       ctx.beginPath();
       ctx.arc(kx, ky, r, 0, Math.PI * 2);
       ctx.fillStyle = k.color;
       ctx.fill();
-      ctx.lineWidth = k.rank === 1 ? 2 : 1.2;
-      ctx.strokeStyle = k.rank === 1 ? '#facc15' : '#ffffff';
+      ctx.lineWidth = isFocused || k.rank === 1 ? 2 : 1.2;
+      ctx.strokeStyle = isFocused ? '#ffffff' : k.rank === 1 ? '#facc15' : 'rgba(255,255,255,0.75)';
       ctx.stroke();
 
       const tag = `P${k.slot + 1}`;

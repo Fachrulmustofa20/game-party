@@ -1,4 +1,4 @@
-# Nitro Party Platform — Developer Guide
+# Gaming Party Platform — Developer Guide
 
 A local-multiplayer (1–10 players) 3D party game platform where a **PC / TV acts as the shared Host screen** and **smartphones act as low-latency controllers** over WebRTC DataChannels (with automatic WebSocket relay fallback) using an 8-byte binary input protocol.
 

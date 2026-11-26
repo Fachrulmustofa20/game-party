@@ -1,7 +1,6 @@
 import { TelemetryPacket } from '../net/BinaryProtocol';
 import { TransportMode } from '../net/HostNetworkManager';
 import {
-  CTRL_SVG_ICONS,
   ControllerOutput,
   ControllerViewContext,
   GameControllerView,
@@ -26,7 +25,7 @@ export class DefaultController implements GameControllerView {
   private touchSteer = 0;
   private analogUp = false;
   private analogDown = false;
-  private arrowMode = false;
+  private arrowMode = localStorage.getItem('default_steer_mode') === 'arrow';
   private arrowState = { up: false, down: false, left: false, right: false };
   private buttons = {
     a: false, // item
@@ -83,10 +82,6 @@ export class DefaultController implements GameControllerView {
         <div class="center-hud">
           <div style="display:flex;justify-content:space-between;width:100%;font-size:11px;align-items:center;gap:6px;">
             <span style="font-weight:900;color:${ctx.color};">P${ctx.slot + 1}</span>
-            <button id="btn-fs" class="btn btn-secondary ctrl-top-btn" style="padding:3px 8px;font-size:10px;">
-              ${CTRL_SVG_ICONS.fullscreen}
-              <span>Fullscreen</span>
-            </button>
             <span id="status-badge" class="badge-ws">Connecting...</span>
           </div>
 
@@ -184,6 +179,7 @@ export class DefaultController implements GameControllerView {
 
     switchBtn?.addEventListener('click', () => {
       this.arrowMode = !this.arrowMode;
+      localStorage.setItem('default_steer_mode', this.arrowMode ? 'arrow' : 'analog');
       this.releaseAllInputs();
       switchBtn.setAttribute('aria-checked', String(this.arrowMode));
       switchBtn.classList.toggle('active', this.arrowMode);

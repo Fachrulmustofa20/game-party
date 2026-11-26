@@ -29,6 +29,7 @@ interface PlayerSession {
   name: string;
   color: string;
   characterId: string;
+  ready: boolean;
   sessionToken: string;
   ws: WebSocket | null;
   connected: boolean;
@@ -142,9 +143,10 @@ const server = http.createServer((req, res) => {
   if (req.url?.startsWith('/api/room-characters')) {
     const u = new URL(req.url, 'http://localhost');
     const code = (u.searchParams.get('room') || '').trim().toUpperCase();
+    const sessionToken = (u.searchParams.get('sessionToken') || '').trim();
     const room = rooms.get(code);
     const exists = Boolean(room && room.hostWs);
-    const takenCharacters = exists && room ? getTakenCharacters(room) : [];
+    const takenCharacters = exists && room ? getTakenCharacters(room, sessionToken || undefined) : [];
     const selectedGameId = exists && room ? room.selectedGameId : 'nitro-kart-3d';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ exists, takenCharacters, selectedGameId }));
@@ -298,6 +300,7 @@ wss.on('connection', (ws) => {
         existing.connected = true;
         existing.name = name || existing.name;
         existing.color = color || existing.color;
+        existing.ready = false;
         if (characterId) existing.characterId = characterId;
         role = 'player';
         roomCode = code;
@@ -309,6 +312,8 @@ wss.on('connection', (ws) => {
           roomCode: code,
           playerId: existing.id,
           slot: existing.slot,
+          selectedGameId: room.selectedGameId,
+          characterId: existing.characterId,
           reconnected: true,
         });
 
@@ -319,6 +324,7 @@ wss.on('connection', (ws) => {
           name: existing.name,
           color: existing.color,
           characterId: existing.characterId,
+          ready: existing.ready,
           reconnected: true,
         });
         return;
@@ -342,6 +348,7 @@ wss.on('connection', (ws) => {
         name,
         color,
         characterId,
+        ready: false,
         sessionToken: sessionToken || `${id}_${Date.now()}`,
         ws,
         connected: true,
@@ -358,6 +365,8 @@ wss.on('connection', (ws) => {
         roomCode: code,
         playerId: id,
         slot,
+        selectedGameId: room.selectedGameId,
+        characterId: newPlayer.characterId,
         sessionToken: newPlayer.sessionToken,
       });
 
@@ -368,7 +377,77 @@ wss.on('connection', (ws) => {
         name: newPlayer.name,
         color: newPlayer.color,
         characterId: newPlayer.characterId,
+        ready: newPlayer.ready,
       });
+      return;
+    }
+
+    if (type === 'select_character' && roomCode && role === 'player' && playerId) {
+      const room = rooms.get(roomCode);
+      const player = room?.players.get(playerId);
+      if (!room || !player) return;
+
+      const characterId =
+        typeof msg.characterId === 'string' && msg.characterId ? msg.characterId.slice(0, 24) : '';
+      const color = typeof msg.color === 'string' && msg.color ? msg.color : player.color;
+
+      if (characterId) {
+        const conflictHuman = Array.from(room.players.values()).find(
+          (p) => p.connected && p.characterId === characterId && p.id !== player.id
+        );
+        const conflictBot = room.botCharacters.includes(characterId);
+        if (conflictHuman || conflictBot) {
+          sendJson(ws, {
+            type: 'error',
+            message: 'Karakter tersebut sudah dipakai pemain lain atau AI! Silakan pilih karakter lain.',
+            takenCharacters: getTakenCharacters(room, player.sessionToken || undefined),
+          });
+          return;
+        }
+      }
+
+      player.characterId = characterId;
+      player.color = color;
+      sendJson(ws, {
+        type: 'character_updated',
+        characterId: player.characterId,
+        color: player.color,
+      });
+      sendJson(room.hostWs, {
+        type: 'player_updated',
+        playerId: player.id,
+        characterId: player.characterId,
+        color: player.color,
+        ready: player.ready,
+      });
+      return;
+    }
+
+    if (type === 'set_ready' && roomCode && role === 'player' && playerId) {
+      const room = rooms.get(roomCode);
+      const player = room?.players.get(playerId);
+      if (!room || !player) return;
+
+      player.ready = Boolean(msg.ready);
+      sendJson(room.hostWs, {
+        type: 'player_updated',
+        playerId: player.id,
+        characterId: player.characterId,
+        color: player.color,
+        ready: player.ready,
+      });
+      return;
+    }
+
+    if (type === 'close_room' && roomCode && role === 'host') {
+      const room = rooms.get(roomCode);
+      if (room) {
+        for (const p of room.players.values()) {
+          sendJson(p.ws, { type: 'room_closed' });
+        }
+        rooms.delete(roomCode);
+      }
+      roomCode = null;
       return;
     }
 

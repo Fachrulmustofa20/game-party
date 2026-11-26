@@ -19,6 +19,7 @@ export interface ConnectedPlayer {
   name: string;
   color: string;
   characterId?: string;
+  ready: boolean;
   connected: boolean;
   transport: TransportMode;
   pingMs: number;
@@ -63,6 +64,7 @@ export class HostNetworkManager {
   }
 
   connect(preferredRoomCode?: string): void {
+    this.closeRoom();
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${proto}//${location.host}/ws`;
     const ws = new WebSocket(wsUrl);
@@ -96,6 +98,21 @@ export class HostNetworkManager {
         this.callbacks.onRoomCreated(String(msg.roomCode));
       } else if (msg.type === 'player_joined') {
         this.handlePlayerJoined(msg);
+      } else if (msg.type === 'player_updated') {
+        const pid = String(msg.playerId);
+        const p = this.players.get(pid);
+        if (p) {
+          if (typeof msg.characterId === 'string') {
+            p.characterId = msg.characterId || undefined;
+          }
+          if (typeof msg.color === 'string' && msg.color) {
+            p.color = msg.color;
+          }
+          if (typeof msg.ready === 'boolean') {
+            p.ready = msg.ready;
+          }
+          this.emitPlayers();
+        }
       } else if (msg.type === 'player_disconnected') {
         const pid = String(msg.playerId);
         const p = this.players.get(pid);
@@ -218,16 +235,27 @@ export class HostNetworkManager {
     const name = String(msg.name || `Player ${slot + 1}`);
     const color = String(msg.color || '#FF4D4D');
     const characterId = typeof msg.characterId === 'string' && msg.characterId ? msg.characterId : undefined;
+    const ready = Boolean(msg.ready);
 
     const existing = this.players.get(id);
     const player: ConnectedPlayer = existing
-      ? { ...existing, name, color, characterId: characterId ?? existing.characterId, connected: true, transport: 'connecting', lastSeq: -1 }
+      ? {
+          ...existing,
+          name,
+          color,
+          characterId: characterId ?? existing.characterId,
+          ready,
+          connected: true,
+          transport: 'connecting',
+          lastSeq: -1,
+        }
       : {
           id,
           slot,
           name,
           color,
           characterId,
+          ready,
           connected: true,
           transport: 'connecting',
           pingMs: 0,
@@ -435,9 +463,30 @@ export class HostNetworkManager {
     this.callbacks.onPlayersChanged(this.getPlayers());
   }
 
-  destroy(): void {
-    if (this.pingInterval !== null) clearInterval(this.pingInterval);
-    for (const pid of this.peers.keys()) this.cleanupPeer(pid);
+  resetPlayersReady(): void {
+    for (const p of this.players.values()) {
+      p.ready = false;
+    }
+    this.emitPlayers();
+  }
+
+  closeRoom(): void {
+    if (this.pingInterval !== null) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'close_room' }));
+    }
     this.ws?.close();
+    this.ws = null;
+    for (const pid of this.peers.keys()) this.cleanupPeer(pid);
+    this.players.clear();
+    this.slotToId.clear();
+    this.emitPlayers();
+  }
+
+  destroy(): void {
+    this.closeRoom();
   }
 }
