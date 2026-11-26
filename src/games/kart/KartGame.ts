@@ -25,7 +25,7 @@ export class KartGame implements PlatformGame {
   id = 'nitro-kart-3d';
   title = 'Nitro Kart 3D (CTR Edition)';
   subtitle =
-    'Balapan 3D HD ala Crash Team Racing untuk 1–10 pemain! Karakter CTR unik, Crash Cove Island, 3-Stage Turbo Boost, dan Hybrid Split-Screen / Stadium Camera.';
+    'Balapan gokart 3D melawan teman atau bot! Lakukan drift untuk mengisi turbo boost, ambil kotak item seperti roket, bom, TNT, dan perisai untuk menyalip lawan hingga garis finis.';
   badge = '1-10 PLAYER • 3D HD RACING';
   accentColor = '#ff6b2b';
   coverImage = '/images/nitro-kart-cover.png';
@@ -1065,8 +1065,8 @@ export class KartGame implements PlatformGame {
           ${rowsHtml}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
-          <button id="btn-rematch" class="btn btn-primary" style="padding:12px;">Balapan Lagi</button>
-          <button id="btn-back-lobby" class="btn btn-secondary" style="padding:12px;">Keluar ke Lobby</button>
+          <button id="btn-rematch" class="btn btn-primary" style="padding:12px;">Main Lagi</button>
+          <button id="btn-back-lobby" class="btn btn-secondary" style="padding:12px;">Kembali ke Lobby</button>
         </div>
       </div>
     `;

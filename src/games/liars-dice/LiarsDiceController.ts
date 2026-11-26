@@ -89,24 +89,21 @@ export class LiarsDiceController implements GameControllerView {
             <span id="ld-ctrl-rank">#1</span>
           </div>
           <div class="ld-ctrl-phase" id="ld-ctrl-phase">Menunggu host</div>
-          <button id="ld-ctrl-fs" type="button" class="btn btn-secondary" style="margin-top:auto;padding:5px 8px;font-size:10px;">
-            Fullscreen
-          </button>
         </div>
 
         <div class="ld-ctrl-panel">
           <div class="ld-ctrl-head">
-            <span>BID SAAT INI</span>
+            <span>TEBAKAN SAAT INI</span>
             <span id="ld-ctrl-timer-label">--</span>
           </div>
           <div class="ld-ctrl-bid" id="ld-ctrl-bid">—</div>
-          <div class="ld-ctrl-bid-sub" id="ld-ctrl-bid-sub">Belum ada bid</div>
+          <div class="ld-ctrl-bid-sub" id="ld-ctrl-bid-sub">Belum ada tebakan</div>
           <div class="ld-ctrl-timer"><div id="ld-ctrl-timer-fill"></div></div>
           <div class="ld-ctrl-turn" id="ld-ctrl-turn">Menunggu giliran...</div>
           <div class="ld-ctrl-result" id="ld-ctrl-result"></div>
 
           <div class="ld-ctrl-head" style="margin-top:auto;">
-            <span>PILIH BID</span>
+            <span>ATUR TEBAKAN</span>
             <span class="ld-ctrl-valid" id="ld-ctrl-valid">—</span>
           </div>
           <div class="ld-ctrl-qty">
@@ -125,12 +122,12 @@ export class LiarsDiceController implements GameControllerView {
             <span id="ld-ctrl-dice-left" style="color:#fbbf24;">3 DADU</span>
           </div>
           <div class="ld-ctrl-actions">
-            <button type="button" id="ld-ctrl-bid-btn" class="ld-ctrl-btn bid" disabled>BID</button>
+            <button type="button" id="ld-ctrl-bid-btn" class="ld-ctrl-btn bid" disabled>TEBAK</button>
             <button type="button" id="ld-ctrl-challenge-btn" class="ld-ctrl-btn challenge" disabled>TANTANG!</button>
           </div>
           <div class="ld-ctrl-hint">
-            Naikkan jumlah atau pilih mata dadu.<br>
-            Lalu tekan BID atau TANTANG.
+            Atur jumlah atau mata dadu.<br>
+            Lalu tekan TEBAK atau TANTANG.
           </div>
         </div>
       </div>

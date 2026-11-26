@@ -117,7 +117,7 @@ export class SpaceDogfightGame implements PlatformGame {
   id = 'space-dogfight-2p';
   title = 'Space Dogfight (10P Arena)';
   subtitle =
-    'Pertempuran pesawat luar angkasa hingga 10 pemain! Stir analog untuk bermanuver, Gas untuk thrust, Drift untuk Barrel Roll, Boost untuk Afterburner, dan Item untuk menembak.';
+    'Pertempuran pesawat tempur di luar angkasa! Bermanuver menghindari tembakan musuh, lakukan barrel roll, aktifkan afterburner untuk mengejar, dan tembak jatuh pesawat lawan.';
   badge = '2-10 PLAYER • 3D SPACE';
   accentColor = '#38bdf8';
   coverImage = COVER_SVG;

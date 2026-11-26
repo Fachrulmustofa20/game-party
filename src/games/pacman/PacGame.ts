@@ -189,7 +189,7 @@ export class PacGame implements PlatformGame {
   readonly id = 'pacman-ghost-hunt';
   readonly title = 'Pac-Man: Ghost Hunt';
   readonly subtitle =
-    '2 tim: Pac-Man kumpulkan 4 power pellet, Ghost kejar sampai nyawa Pac-Man habis. Semua pemain manusia, tanpa bot.';
+    'Pertarungan 2 tim di labirin! Tim Pac-Man harus mengumpulkan semua power pellet untuk menang, sementara tim Ghost bekerja sama mengejar dan menghabiskan nyawa Pac-Man.';
   readonly badge = '2-8 PLAYER • PAC VS GHOST';
   readonly accentColor = '#facc15';
   readonly coverImage = COVER_SVG;

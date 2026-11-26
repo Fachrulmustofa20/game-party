@@ -1,5 +1,6 @@
 import { SpaceAudioEngine } from '../games/dogfight/SpaceAudioEngine';
 import { LiarsDiceAudioEngine } from '../games/liars-dice/LiarsDiceAudioEngine';
+import { PokerAudioEngine } from '../games/poker/PokerAudioEngine';
 import { DefaultAudioEngine, GameAudioEngine } from './GameAudioEngine';
 import { KartAudioEngine } from './KartAudioEngine';
 
@@ -12,6 +13,7 @@ const AUDIO_FACTORIES: Record<string, () => GameAudioEngine> = {
   'nitro-kart-3d': () => new KartAudioEngine(),
   'space-dogfight-2p': () => new SpaceAudioEngine(),
   'liars-dice': () => new LiarsDiceAudioEngine(),
+  'texas-poker': () => new PokerAudioEngine(),
 };
 
 export function createAudioForGame(gameId: string | null): GameAudioEngine {

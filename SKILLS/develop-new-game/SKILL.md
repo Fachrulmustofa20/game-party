@@ -19,6 +19,8 @@ This platform separates **immutable core infrastructure** (WebRTC P2P + WebSocke
 - `src/controller/ControllerApp.ts` — Join flow, room verification, dynamic controller/audio switching
 - `src/controller/GameControllerView.ts` — `GameControllerView` interface & shared UI/input helpers
 - `src/controller/DefaultController.ts` — Default `A/B/C/D` + `Analog/Arrow` controller
+- `src/controller/GameCharacterView.ts` — `GameCharacterView` interface & `mountStandardCharacterPicker()` helper
+- `src/controller/DefaultCharacterView.ts` — Default colored character selector fallback
 - `src/audio/GameAudioEngine.ts` — `GameAudioEngine` interface & `DefaultAudioEngine` fallback
 - `src/games/kart/KartController.ts` — Dedicated CTR controller for `nitro-kart-3d` (leave untouched)
 
@@ -26,7 +28,8 @@ This platform separates **immutable core infrastructure** (WebRTC P2P + WebSocke
 1. **Game Logic & Renderer:** `src/games/<game-slug>/<Name>Game.ts`
 2. **Hub Registration:** `src/platform/PlatformApp.ts` (`games` array)
 3. **Custom Controller (Optional):** `src/games/<game-slug>/<Name>Controller.ts` + `src/controller/ControllerRegistry.ts`
-4. **Custom Audio Engine (Optional):** `src/games/<game-slug>/<Name>AudioEngine.ts` + `src/audio/AudioRegistry.ts`
+4. **Custom Character View (Optional):** `src/games/<game-slug>/<Name>CharacterView.ts` + `src/sdk/CharacterRegistry.ts`
+5. **Custom Audio Engine (Optional):** `src/games/<game-slug>/<Name>AudioEngine.ts` + `src/audio/AudioRegistry.ts`
 
 ---
 
@@ -142,7 +145,19 @@ Skip this step if `DefaultController` fits your game. Otherwise:
    };
    ```
 
-### Step 4 (Optional): Add a Per-Game Audio Engine
+### Step 4 (Optional): Add a Custom Character Selection View
+Skip this step if your game should use the default colored characters (`DefaultCharacterView`). Otherwise:
+1. Create `src/games/<game-slug>/<Name>CharacterView.ts` implementing `GameCharacterView` (`src/controller/GameCharacterView.ts`).
+2. Reuse `mountStandardCharacterPicker(...)` from `src/controller/GameCharacterView.ts` for standard preview + grid behavior, or render a completely custom picker UI inside `mount(container, ctx)`.
+3. Register it in `src/sdk/CharacterRegistry.ts`:
+   ```ts
+   const CHARACTER_VIEW_FACTORIES: Record<string, () => GameCharacterView> = {
+     'nitro-kart-3d': () => new KartCharacterView(),
+     'my-new-game': () => new MyNewCharacterView(),
+   };
+   ```
+
+### Step 5 (Optional): Add a Per-Game Audio Engine
 Skip this step if your game does not need custom Web Audio synthesis (it will use `DefaultAudioEngine`). Otherwise:
 1. Create `src/games/<game-slug>/<Name>AudioEngine.ts` implementing `GameAudioEngine` (`src/audio/GameAudioEngine.ts`):
    - `readonly id = 'my-new-game';`

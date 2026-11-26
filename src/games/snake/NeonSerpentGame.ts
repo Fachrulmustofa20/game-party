@@ -209,7 +209,7 @@ export class NeonSerpentGame implements PlatformGame {
   readonly id = 'neon-serpent';
   readonly title = 'Neon Serpent';
   readonly subtitle =
-    'Makan pellet, tumbuh panjang, boost, dan jegal kepala lawan. Arena slither-style untuk 2-10 pemain.';
+    'Kendalikan ular neonmu, makan pellet bercahaya agar tumbuh makin panjang, pakai boost untuk memotong jalur lawan, dan buat kepala lawan menabrak tubuhmu.';
   readonly badge = '2-10 PLAYER • ARENA';
   readonly accentColor = '#22d3ee';
   readonly coverImage = COVER_SVG;

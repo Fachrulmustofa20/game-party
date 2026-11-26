@@ -11,6 +11,7 @@ import { SpaceDogfightGame } from '../games/dogfight/SpaceDogfightGame';
 import { PacGame } from '../games/pacman/PacGame';
 import { NeonSerpentGame } from '../games/snake/NeonSerpentGame';
 import { LiarsDiceGame } from '../games/liars-dice/LiarsDiceGame';
+import { PokerGame } from '../games/poker/PokerGame';
 
 const ROOM_STORAGE_KEY = 'nitro_host_room_code';
 const DONATION_URL = 'https://saweria.co/fachrulmustofa';
@@ -46,6 +47,7 @@ export class PlatformApp {
     new PacGame(),
     new NeonSerpentGame(),
     new LiarsDiceGame(),
+    new PokerGame(),
   ];
   private selectedGame: PlatformGame = this.games[0];
 
@@ -294,7 +296,7 @@ export class PlatformApp {
               <span class="brand-badge">Multiplayer 10P</span>
             </div>
             <span style="font-size:13px;color:var(--muted);">
-              Pilih game di bawah untuk membuat Room &amp; QR Code controller HP
+              Pilih game favoritmu untuk bikin room dan sambungkan HP sebagai kontroler.
             </span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -314,8 +316,8 @@ export class PlatformApp {
         <main class="hub-main" style="max-width:1360px;width:100%;margin:0 auto;">
           <div>
             <div class="section-header" style="margin-bottom:14px;">
-              <h2 class="section-title">Daftar Game Platform</h2>
-              <span style="font-size:12px;color:var(--muted);">Klik salah satu game untuk membuat Kode Room &amp; QR Code</span>
+              <h2 class="section-title">Pilih Game</h2>
+              <span style="font-size:12px;color:var(--muted);">Klik tombol Buat Room &amp; Main di game yang ingin dimainkan</span>
             </div>
             <div class="games-grid" id="games-grid"></div>
           </div>
@@ -477,7 +479,7 @@ export class PlatformApp {
         <div class="room-modal-body">
           <div class="room-modal-left">
             <div style="font-size:12px;color:var(--muted);line-height:1.45;">
-              Scan QR Code dengan kamera HP (di Wi-Fi yang sama), lalu klik <strong>Gabung</strong>, pilih karakter, dan klik <strong>READY</strong>.
+              Scan QR Code pakai kamera HP (pastikan satu Wi-Fi), lalu isi nama dan klik <strong>Gabung</strong>.
             </div>
             <div class="qr-card">
               <button
@@ -683,7 +685,7 @@ export class PlatformApp {
 
     if (merged.length === 0) {
       startBtn.disabled = true;
-      statusText.textContent = 'Belum ada pemain di dalam room. Scan QR Code untuk bergabung atau isi Bots.';
+      statusText.textContent = 'Belum ada pemain yang masuk. Scan QR Code dari HP atau tambah Bot dulu.';
       if (summaryEl) {
         summaryEl.textContent = 'Belum ada pemain';
         summaryEl.className = 'ready-summary-pill waiting';
@@ -693,9 +695,9 @@ export class PlatformApp {
 
     if (connectedHumans.length === 0) {
       startBtn.disabled = false;
-      statusText.textContent = 'Mode Solo Keyboard PC / Bots siap dimulai.';
+      statusText.textContent = 'Siap main solo dengan Keyboard PC & Bot!';
       if (summaryEl) {
-        summaryEl.textContent = 'Mode Solo / Bots';
+        summaryEl.textContent = 'Mode Solo & Bot';
         summaryEl.className = 'ready-summary-pill ready';
       }
       return;
@@ -704,13 +706,13 @@ export class PlatformApp {
     const allReady = readyCount === connectedHumans.length;
     startBtn.disabled = !allReady;
     if (allReady) {
-      statusText.textContent = `Semua pemain (${readyCount}/${connectedHumans.length}) sudah READY! Klik Mulai Game.`;
+      statusText.textContent = `Semua pemain siap (${readyCount}/${connectedHumans.length})! Yuk, mulai gamenya.`;
       if (summaryEl) {
         summaryEl.textContent = `${readyCount}/${connectedHumans.length} Siap`;
         summaryEl.className = 'ready-summary-pill ready';
       }
     } else {
-      statusText.textContent = `Menunggu semua pemain di room klik READY (${readyCount}/${connectedHumans.length} siap).`;
+      statusText.textContent = `Menunggu semua pemain menekan Siap (${readyCount}/${connectedHumans.length} sudah siap).`;
       if (summaryEl) {
         summaryEl.textContent = `${readyCount}/${connectedHumans.length} Siap`;
         summaryEl.className = 'ready-summary-pill waiting';
@@ -820,14 +822,14 @@ export class PlatformApp {
         const pingLabel = p.isBot ? '0 ms' : `${p.pingMs} ms`;
         const charName = p.characterId
           ? this.getCharacterDisplayName(p.characterId, slot)
-          : 'Memilih karakter...';
+          : 'Lagi pilih karakter...';
         const remoteMatch = !p.isBot && p.id !== 'local_p1'
           ? this.remotePlayers.find((rp) => rp.id === p.id)
           : undefined;
         const isReady = p.isBot || p.id === 'local_p1' ? true : Boolean(remoteMatch?.ready);
         const readyBadge = isReady
-          ? '<span class="slot-ready-badge ready">SIAP</span>'
-          : '<span class="slot-ready-badge waiting">BELUM SIAP</span>';
+          ? '<span class="slot-ready-badge ready">Siap</span>'
+          : '<span class="slot-ready-badge waiting">Belum Siap</span>';
 
         cell.innerHTML = `
           <div class="slot-top">

@@ -3,29 +3,19 @@ import { GameAudioEngine } from '../audio/GameAudioEngine';
 import { ControllerNetworkClient } from '../net/ControllerNetworkClient';
 import { TransportMode } from '../net/HostNetworkManager';
 import {
-  KART_CHARACTERS,
-  getKartCharacter,
-  renderCarPreviewSvg,
-  renderHeroPreviewSvg,
-} from '../sdk/KartCharacters';
-import {
-  SPACE_CHARACTERS,
-  getSpaceCharacter,
-  renderShipPreviewSvg,
-} from '../sdk/SpaceCharacters';
-import { SNAKE_CHARACTERS, getSnakeCharacter } from '../sdk/SnakeColors';
+  createCharacterViewForGame,
+  getCharacterRosterForGame,
+} from '../sdk/CharacterRegistry';
 import { createControllerForGame } from './ControllerRegistry';
+import { GameCharacterView } from './GameCharacterView';
 import { GameControllerView } from './GameControllerView';
 
 export class ControllerApp {
   private root: HTMLElement;
   private initialRoom: string;
   private client: ControllerNetworkClient;
-  private selectedCharacter = KART_CHARACTERS[Math.floor(Math.random() * KART_CHARACTERS.length)].id;
-  private selectedColor =
-    getKartCharacter(this.selectedCharacter, 0).outfit === '#0f172a'
-      ? '#334155'
-      : getKartCharacter(this.selectedCharacter, 0).outfit;
+  private selectedCharacter = getCharacterRosterForGame('nitro-kart-3d').characters[0].id;
+  private selectedColor = getCharacterRosterForGame('nitro-kart-3d').characters[0].color;
   private takenCharacters = new Set<string>();
   private takenPollTimer: number | null = null;
   private rerenderCarsFn: (() => void) | null = null;
@@ -36,6 +26,7 @@ export class ControllerApp {
   private joined = false;
   private isReady = false;
   private activeGameId: string | null = null;
+  private activeCharView: GameCharacterView = createCharacterViewForGame(null);
   private activeController: GameControllerView = createControllerForGame(null);
   private transportMode: TransportMode = 'connecting';
   private wakeLock: WakeLockSentinel | null = null;
@@ -200,12 +191,12 @@ export class ControllerApp {
       <div class="ctrl-landscape-guard" id="landscape-guard" role="dialog" aria-modal="true" aria-labelledby="landscape-guard-title">
         <div class="landscape-guard-card">
           <div class="rotate-phone-icon" aria-hidden="true">📱</div>
-          <h2 id="landscape-guard-title" style="margin:0;font-size:20px;font-weight:900;">Wajib Mode Landscape</h2>
+          <h2 id="landscape-guard-title" style="margin:0;font-size:20px;font-weight:900;">Putar Layar ke Landscape</h2>
           <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5;">
-            Controller hanya bisa digunakan dalam posisi layar mendatar (landscape). Putar HP Anda sekarang.
+            Biar kontroler nyaman dipakai, putar HP ke posisi mendatar ya.
           </p>
           <button id="btn-force-landscape" class="btn btn-primary" style="width:100%;">
-            Putar ke Landscape (Fullscreen)
+            Aktifkan Layar Penuh
           </button>
         </div>
       </div>
@@ -239,7 +230,7 @@ export class ControllerApp {
             <span class="brand-badge">Gabung Room</span>
           </div>
           <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.45;">
-            Masukkan <strong>Kode Room</strong> &amp; <strong>Nama Pemain</strong> lalu klik <strong>Gabung</strong>. Setelah masuk, Anda bisa memilih karakter dan klik <strong>Ready</strong>.
+            Masukkan <strong>Kode Room</strong> dari layar PC dan namamu, lalu tekan <strong>Gabung</strong>.
           </p>
           <label for="inp-room" style="font-size:12px;color:var(--muted);">Kode Room</label>
           <input id="inp-room" class="ctrl-input" maxlength="6" placeholder="ABCD" value="${prefillRoom}" style="text-transform:uppercase;letter-spacing:0.15em;" />
@@ -335,8 +326,8 @@ export class ControllerApp {
     }
 
     const activeRoom = this.verifiedRoomCode || this.initialRoom.toUpperCase();
-    const isDogfight = this.selectedGameId === 'space-dogfight-2p';
-    const isSerpent = this.selectedGameId === 'neon-serpent';
+    this.activeCharView.unmount();
+    this.activeCharView = createCharacterViewForGame(this.selectedGameId);
     this.ensureValidCharacterSelection();
     this.client.selectCharacter(this.selectedCharacter, this.selectedColor);
 
@@ -347,10 +338,12 @@ export class ControllerApp {
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
             <div style="display:flex;align-items:center;gap:8px;">
               <h2 style="margin:0;font-size:20px;font-weight:900;">Lobby Room</h2>
-              <span class="brand-badge">${isSerpent ? 'Pilih Warna' : 'Pilih Karakter'}</span>
+              <span class="brand-badge">${
+                this.activeCharView.id === 'default' ? 'Pilih Warna' : 'Pilih Karakter'
+              }</span>
             </div>
             <span id="lobby-ready-pill" class="ready-summary-pill ${this.isReady ? 'ready' : 'waiting'}">
-              ${this.isReady ? 'SIAP' : 'BELUM READY'}
+              ${this.isReady ? 'Sudah Siap' : 'Belum Siap'}
             </span>
           </div>
 
@@ -362,41 +355,26 @@ export class ControllerApp {
                 <div class="lobby-room-sub">Room <strong>${activeRoom}</strong></div>
               </div>
             </div>
-            <button id="btn-edit-join" type="button" class="btn-edit-pill" title="Ubah Kode Room atau Nama Pemain">
+            <button id="btn-edit-join" type="button" class="btn-edit-pill" title="Ganti Kode Room atau Nama Pemain">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 20h9"/>
                 <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"/>
               </svg>
-              <span>Ubah Room / Nama</span>
+              <span>Ganti Room / Nama</span>
             </button>
           </div>
 
-          <label style="font-size:12px;color:var(--muted);">${
-            isDogfight
-              ? 'Pesawat Space Fighter Terpilih'
-              : isSerpent
-              ? 'Warna Ular Terpilih'
-              : 'Karakter &amp; Mobil Terpilih'
-          }</label>
-          <div class="selected-char-preview" id="selected-char-preview"></div>
-          <label style="font-size:12px;color:var(--muted);">${
-            isDogfight
-              ? 'Pilih Pesawat Space Fighter'
-              : isSerpent
-              ? 'Pilih Warna Ular (Tidak Boleh Sama)'
-              : 'Pilih Karakter'
-          }</label>
-          <div class="character-picker-grid" id="character-row"></div>
+          <div id="char-view-mount"></div>
 
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
             <button id="btn-ready" type="button" class="btn ${this.isReady ? 'btn-ready-active' : 'btn-primary'}" style="padding:14px;font-size:16px;">
-              ${this.isReady ? 'Batalkan' : 'READY'}
+              ${this.isReady ? 'Batal Siap' : 'Saya Siap!'}
             </button>
             <div id="ready-hint" style="font-size:12px;color:var(--muted);text-align:center;">
               ${
                 this.isReady
-                  ? 'Menunggu semua pemain lain klik READY & Host memulai game...'
-                  : 'Pilih karakter Anda, lalu klik READY untuk memulai game.'
+                  ? 'Sip! Tunggu pemain lain siap dan host memulai gamenya ya...'
+                  : 'Pilih karaktermu dulu, lalu tekan Saya Siap!'
               }
             </div>
           </div>
@@ -418,150 +396,29 @@ export class ControllerApp {
       this.renderJoinScreen();
     });
 
-    const charRow = this.root.querySelector('#character-row')!;
-    const previewBox = this.root.querySelector('#selected-char-preview') as HTMLElement | null;
+    const charMount = this.root.querySelector('#char-view-mount') as HTMLElement;
     const readyBtn = this.root.querySelector('#btn-ready') as HTMLButtonElement | null;
     const readyPill = this.root.querySelector('#lobby-ready-pill') as HTMLElement | null;
     const readyHint = this.root.querySelector('#ready-hint') as HTMLElement | null;
 
-    const renderSelectedPreview = () => {
-      if (!previewBox) return;
-      if (this.takenCharacters.has(this.selectedCharacter)) {
-        previewBox.style.borderColor = '#ef4444';
-        previewBox.innerHTML = `
-          <div style="width:100%;text-align:center;font-size:12px;font-weight:800;color:#fca5a5;">
-            Semua ${isDogfight ? 'pesawat' : isSerpent ? 'warna ular' : 'karakter'} sedang dipakai oleh Pemain / AI di room ${activeRoom}!
-          </div>
-        `;
-        return;
-      }
-      if (isSerpent) {
-        const sn = getSnakeCharacter(this.selectedCharacter, 0);
-        previewBox.style.borderColor = sn.color;
-        previewBox.innerHTML = `
-          <div class="selected-char-visuals">
-            <span style="width:36px;height:36px;border-radius:50%;background:${sn.color};box-shadow:0 0 16px ${sn.color};border:2px solid rgba(255,255,255,0.75);display:inline-block;"></span>
-          </div>
-          <div class="selected-char-info">
-            <div class="selected-char-name">${sn.name}</div>
-            <div class="selected-char-car">Neon Serpent</div>
-          </div>
-        `;
-        return;
-      }
-      if (isDogfight) {
-        const sh = getSpaceCharacter(this.selectedCharacter, 0);
-        previewBox.style.borderColor = this.selectedColor;
-        previewBox.innerHTML = `
-          <div class="selected-char-visuals">
-            ${renderShipPreviewSvg(sh.shipStyle, sh.color, sh.accent)}
-          </div>
-          <div class="selected-char-info">
-            <div class="selected-char-name">${sh.name}</div>
-            <div class="selected-char-car">${sh.shipLabel}</div>
-          </div>
-        `;
-        return;
-      }
-      const ch = getKartCharacter(this.selectedCharacter, 0);
-      previewBox.style.borderColor = this.selectedColor;
-      previewBox.innerHTML = `
-        <div class="selected-char-visuals">
-          ${renderHeroPreviewSvg(ch.driverTheme)}
-          ${renderCarPreviewSvg(ch.carStyle, this.selectedColor, ch.accent)}
-        </div>
-        <div class="selected-char-info">
-          <div class="selected-char-name">${ch.name}</div>
-          <div class="selected-char-car">${ch.carLabel}</div>
-        </div>
-      `;
-    };
+    const buildPickerCtx = () => ({
+      roomCode: activeRoom,
+      selectedCharacterId: this.selectedCharacter,
+      takenCharacters: this.takenCharacters,
+      isLocked: this.isReady,
+      onSelect: (charId: string, color: string) => {
+        this.selectedCharacter = charId;
+        this.selectedColor = color;
+        this.client.selectCharacter(charId, color);
+        this.activeCharView.update(buildPickerCtx());
+      },
+    });
 
+    this.activeCharView.mount(charMount, buildPickerCtx());
     const renderCars = () => {
-      charRow.innerHTML = '';
-      if (isSerpent) {
-        SNAKE_CHARACTERS.forEach((sn) => {
-          const isMine = sn.id === this.selectedCharacter;
-          const isTaken = !isMine && this.takenCharacters.has(sn.id);
-          const card = document.createElement('button');
-          card.type = 'button';
-          card.disabled = isTaken || this.isReady;
-          card.setAttribute('aria-disabled', String(isTaken || this.isReady));
-          card.className = `character-card ${isMine ? 'selected' : ''} ${isTaken ? 'taken' : ''}`;
-          card.style.padding = '10px 6px';
-          card.innerHTML = `
-            <span style="width:28px;height:28px;border-radius:50%;background:${sn.color};box-shadow:0 0 10px ${sn.color};border:2px solid rgba(255,255,255,0.65);display:inline-block;"></span>
-            <span class="character-name" style="margin-top:4px;">${sn.name}</span>
-            ${isTaken ? '<span class="character-taken-badge">DIPAKAI</span>' : ''}
-          `;
-          card.addEventListener('click', () => {
-            if (this.isReady || isTaken) return;
-            this.selectedCharacter = sn.id;
-            this.selectedColor = sn.color;
-            charRow.querySelectorAll('.character-card').forEach((el) => el.classList.remove('selected'));
-            card.classList.add('selected');
-            renderSelectedPreview();
-            this.client.selectCharacter(this.selectedCharacter, this.selectedColor);
-          });
-          charRow.appendChild(card);
-        });
-      } else if (isDogfight) {
-        SPACE_CHARACTERS.forEach((sh) => {
-          const isMine = sh.id === this.selectedCharacter;
-          const isTaken = !isMine && this.takenCharacters.has(sh.id);
-          const card = document.createElement('button');
-          card.type = 'button';
-          card.disabled = isTaken || this.isReady;
-          card.setAttribute('aria-disabled', String(isTaken || this.isReady));
-          card.className = `character-card ${isMine ? 'selected' : ''} ${isTaken ? 'taken' : ''}`;
-          card.innerHTML = `
-            ${renderShipPreviewSvg(sh.shipStyle, sh.color, sh.accent)}
-            <span class="character-name">${sh.name}</span>
-            <span class="character-car">${isTaken ? 'SUDAH DIPAKAI' : sh.shipLabel}</span>
-            ${isTaken ? '<span class="character-taken-badge">DIPAKAI</span>' : ''}
-          `;
-          card.addEventListener('click', () => {
-            if (this.isReady || isTaken) return;
-            this.selectedCharacter = sh.id;
-            this.selectedColor = sh.color;
-            charRow.querySelectorAll('.character-card').forEach((el) => el.classList.remove('selected'));
-            card.classList.add('selected');
-            renderSelectedPreview();
-            this.client.selectCharacter(this.selectedCharacter, this.selectedColor);
-          });
-          charRow.appendChild(card);
-        });
-      } else {
-        KART_CHARACTERS.forEach((ch) => {
-          const isMine = ch.id === this.selectedCharacter;
-          const isTaken = !isMine && this.takenCharacters.has(ch.id);
-          const card = document.createElement('button');
-          card.type = 'button';
-          card.disabled = isTaken || this.isReady;
-          card.setAttribute('aria-disabled', String(isTaken || this.isReady));
-          card.className = `character-card ${isMine ? 'selected' : ''} ${isTaken ? 'taken' : ''}`;
-          card.innerHTML = `
-            ${renderHeroPreviewSvg(ch.driverTheme)}
-            <span class="character-name">${ch.name}</span>
-            <span class="character-car">${isTaken ? 'SUDAH DIPAKAI' : ch.carLabel}</span>
-            ${isTaken ? '<span class="character-taken-badge">DIPAKAI</span>' : ''}
-          `;
-          card.addEventListener('click', () => {
-            if (this.isReady || isTaken) return;
-            this.selectedCharacter = ch.id;
-            this.selectedColor = ch.outfit === '#0f172a' ? '#334155' : ch.outfit;
-            charRow.querySelectorAll('.character-card').forEach((el) => el.classList.remove('selected'));
-            card.classList.add('selected');
-            renderSelectedPreview();
-            this.client.selectCharacter(this.selectedCharacter, this.selectedColor);
-          });
-          charRow.appendChild(card);
-        });
-      }
-      renderSelectedPreview();
+      this.activeCharView.update(buildPickerCtx());
     };
     this.rerenderCarsFn = renderCars;
-    renderCars();
 
     this.takenPollTimer = window.setInterval(() => {
       if (this.verifiedRoomCode) {
@@ -574,16 +431,16 @@ export class ControllerApp {
       this.client.setReady(this.isReady);
       if (readyBtn) {
         readyBtn.className = `btn ${this.isReady ? 'btn-ready-active' : 'btn-primary'}`;
-        readyBtn.textContent = this.isReady ? 'Batalkan' : 'READY';
+        readyBtn.textContent = this.isReady ? 'Batal Siap' : 'Saya Siap!';
       }
       if (readyPill) {
         readyPill.className = `ready-summary-pill ${this.isReady ? 'ready' : 'waiting'}`;
-        readyPill.textContent = this.isReady ? 'SIAP' : 'BELUM READY';
+        readyPill.textContent = this.isReady ? 'Sudah Siap' : 'Belum Siap';
       }
       if (readyHint) {
         readyHint.textContent = this.isReady
-          ? 'Menunggu semua pemain lain klik READY & Host memulai game...'
-          : 'Pilih karakter Anda, lalu klik READY untuk memulai game.';
+          ? 'Sip! Tunggu pemain lain siap dan host memulai gamenya ya...'
+          : 'Pilih karaktermu dulu, lalu tekan Saya Siap!';
       }
       renderCars();
     });
@@ -671,29 +528,12 @@ export class ControllerApp {
   }
 
   private ensureValidCharacterSelection(): void {
-    if (this.selectedGameId === 'neon-serpent') {
-      const valid = SNAKE_CHARACTERS.some((c) => c.id === this.selectedCharacter);
-      if (!valid || this.takenCharacters.has(this.selectedCharacter)) {
-        const free = SNAKE_CHARACTERS.find((c) => !this.takenCharacters.has(c.id)) ?? SNAKE_CHARACTERS[0];
-        this.selectedCharacter = free.id;
-        this.selectedColor = free.color;
-      }
-      return;
-    }
-    if (this.selectedGameId === 'space-dogfight-2p') {
-      const valid = SPACE_CHARACTERS.some((c) => c.id === this.selectedCharacter);
-      if (!valid || this.takenCharacters.has(this.selectedCharacter)) {
-        const free = SPACE_CHARACTERS.find((c) => !this.takenCharacters.has(c.id)) ?? SPACE_CHARACTERS[0];
-        this.selectedCharacter = free.id;
-        this.selectedColor = free.color;
-      }
-      return;
-    }
-    const valid = KART_CHARACTERS.some((c) => c.id === this.selectedCharacter);
+    const roster = getCharacterRosterForGame(this.selectedGameId).characters;
+    const valid = roster.some((c) => c.id === this.selectedCharacter);
     if (!valid || this.takenCharacters.has(this.selectedCharacter)) {
-      const free = KART_CHARACTERS.find((c) => !this.takenCharacters.has(c.id)) ?? KART_CHARACTERS[0];
+      const free = roster.find((c) => !this.takenCharacters.has(c.id)) ?? roster[0];
       this.selectedCharacter = free.id;
-      this.selectedColor = free.outfit === '#0f172a' ? '#334155' : free.outfit;
+      this.selectedColor = free.color;
     }
   }
 
