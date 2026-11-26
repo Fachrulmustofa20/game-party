@@ -246,7 +246,7 @@ export class ControllerApp {
           <label for="inp-name" style="font-size:12px;color:var(--muted);">Nama Pemain</label>
           <input id="inp-name" class="ctrl-input" maxlength="32" placeholder="${isDogfight ? 'Pilot' : 'Pembalap'}" value="${this.playerNameDraft}" />
           <div id="room-check-msg" style="font-size:12px;color:#fca5a5;font-weight:700;display:none;"></div>
-          <button id="btn-join" type="submit" class="btn btn-primary" style="padding:14px;font-size:16px;">Gabung</button>
+          <button id="btn-join" type="submit" class="btn btn-primary" style="padding:14px;font-size:16px;margin-top:10px;">Gabung</button>
         </form>
       </div>
     `;
@@ -346,12 +346,29 @@ export class ControllerApp {
         <div class="ctrl-join" style="width:min(94%, 560px);">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <h2 style="margin:0;font-size:20px;font-weight:900;">Room ${activeRoom} • P${this.mySlot + 1}</h2>
+              <h2 style="margin:0;font-size:20px;font-weight:900;">Lobby Room</h2>
               <span class="brand-badge">${isSerpent ? 'Pilih Warna' : 'Pilih Karakter'}</span>
             </div>
             <span id="lobby-ready-pill" class="ready-summary-pill ${this.isReady ? 'ready' : 'waiting'}">
               ${this.isReady ? 'SIAP' : 'BELUM READY'}
             </span>
+          </div>
+
+          <div class="lobby-identity-bar">
+            <div class="lobby-identity-info">
+              <span class="lobby-slot-tag">P${this.mySlot + 1}</span>
+              <div style="min-width:0;">
+                <div class="lobby-player-name">${this.playerNameDraft || 'Player'}</div>
+                <div class="lobby-room-sub">Room <strong>${activeRoom}</strong></div>
+              </div>
+            </div>
+            <button id="btn-edit-join" type="button" class="btn-edit-pill" title="Ubah Kode Room atau Nama Pemain">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z"/>
+              </svg>
+              <span>Ubah Room / Nama</span>
+            </button>
           </div>
 
           <label style="font-size:12px;color:var(--muted);">${
@@ -388,6 +405,18 @@ export class ControllerApp {
     `;
 
     this.bindLandscapeGuard();
+
+    this.root.querySelector('#btn-edit-join')?.addEventListener('click', () => {
+      if (this.takenPollTimer !== null) {
+        clearInterval(this.takenPollTimer);
+        this.takenPollTimer = null;
+      }
+      this.client.destroy();
+      this.joined = false;
+      this.isReady = false;
+      this.initialRoom = activeRoom;
+      this.renderJoinScreen();
+    });
 
     const charRow = this.root.querySelector('#character-row')!;
     const previewBox = this.root.querySelector('#selected-char-preview') as HTMLElement | null;
