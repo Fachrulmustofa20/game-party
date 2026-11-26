@@ -5,7 +5,7 @@ description: Strict boundary rules preventing AI agents from modifying, refactor
 
 # Core Code Protection Skill
 
-Follow these strict boundary rules on every task in **Nitro Party Platform** so existing networking, signaling, and games remain stable and untouched.
+Follow these strict boundary rules on every task in **Gaming Party Platform** so existing networking, signaling, and games remain stable and untouched.
 
 ## 1. Golden Rule: Minimal Scope Only
 

@@ -58,10 +58,11 @@ export interface KartState {
   allWheels: THREE.Mesh[];
   driverGroup?: THREE.Group;
   headGroup?: THREE.Group;
-  steerWheel?: THREE.Mesh;
+  steerWheel?: THREE.Object3D;
   lookBackTimer?: number;
   wrongWay?: boolean;
   wrongWaySprite?: THREE.Sprite;
+  nameplateSprite?: THREE.Sprite;
 }
 
 function createNameplateSprite(name: string, accentColor: string): THREE.Sprite {
@@ -70,7 +71,7 @@ function createNameplateSprite(name: string, accentColor: string): THREE.Sprite 
   canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = 'rgba(8, 12, 23, 0.8)';
+  ctx.fillStyle = 'rgba(8, 12, 23, 0.62)';
   ctx.strokeStyle = accentColor;
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -91,7 +92,7 @@ function createNameplateSprite(name: string, accentColor: string): THREE.Sprite 
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9, depthTest: true });
   const sprite = new THREE.Sprite(mat);
   sprite.position.set(0, 4.45, 0);
   sprite.scale.set(3.6, 0.9, 1);
@@ -120,7 +121,7 @@ function createWrongWaySprite(): THREE.Sprite {
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9, depthTest: true });
   const sprite = new THREE.Sprite(mat);
   sprite.position.set(0, 5.35, 0);
   sprite.scale.set(3.4, 0.9, 1);
@@ -622,7 +623,7 @@ export function createKartMesh(
   allWheels: THREE.Mesh[];
   driverGroup?: THREE.Group;
   headGroup?: THREE.Group;
-  steerWheel?: THREE.Mesh;
+  steerWheel?: THREE.Object3D;
   lookBackTimer?: number;
   wrongWay?: boolean;
   wrongWaySprite?: THREE.Sprite;
@@ -828,10 +829,56 @@ export function createKartMesh(
     group.add(flame);
   }
 
-  // Steering Wheel
-  const steerWheel = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.05, 6, 12), darkMetal);
-  steerWheel.position.set(0, 1.05, 0.65);
-  steerWheel.rotation.x = -0.5;
+  // Steering Column + Realistic Car Steering Wheel matched to each car model
+  const wheelSpec =
+    char.carStyle === 'formula'
+      ? { y: 1.02, z: 0.92, tilt: -0.35, radius: 0.2, colY: 0.86, colZ: 1.04 }
+      : char.carStyle === 'monster'
+      ? { y: 1.52, z: 0.8, tilt: -0.64, radius: 0.25, colY: 1.34, colZ: 0.94 }
+      : char.carStyle === 'buggy'
+      ? { y: 1.12, z: 0.86, tilt: -0.5, radius: 0.23, colY: 0.94, colZ: 0.98 }
+      : char.carStyle === 'hover'
+      ? { y: 1.15, z: 0.86, tilt: -0.45, radius: 0.22, colY: 0.96, colZ: 0.98 }
+      : char.carStyle === 'tank'
+      ? { y: 1.28, z: 0.86, tilt: -0.56, radius: 0.25, colY: 1.08, colZ: 0.99 }
+      : { y: 1.18, z: 0.88, tilt: -0.5, radius: 0.23, colY: 0.98, colZ: 1.0 };
+
+  const steerColumn = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.038, 0.05, 0.42, 10),
+    darkMetal
+  );
+  steerColumn.position.set(0, wheelSpec.colY, wheelSpec.colZ);
+  steerColumn.rotation.x = wheelSpec.tilt - 0.06;
+  group.add(steerColumn);
+
+  const steerWheel = new THREE.Group();
+  steerWheel.position.set(0, wheelSpec.y, wheelSpec.z);
+  steerWheel.rotation.x = wheelSpec.tilt;
+
+  const wheelRim = new THREE.Mesh(
+    new THREE.TorusGeometry(wheelSpec.radius, 0.026, 12, 32),
+    new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.42, metalness: 0.35 })
+  );
+  const wheelHub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.065, 0.065, 0.04, 20),
+    darkMetal
+  );
+  wheelHub.rotation.x = Math.PI / 2;
+  const wheelCap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 0.045, 16),
+    accentMat
+  );
+  wheelCap.rotation.x = Math.PI / 2;
+  const spokeH = new THREE.Mesh(
+    new THREE.BoxGeometry(wheelSpec.radius * 1.92, 0.036, 0.022),
+    darkMetal
+  );
+  const spokeV = new THREE.Mesh(
+    new THREE.BoxGeometry(0.036, wheelSpec.radius * 0.95, 0.022),
+    darkMetal
+  );
+  spokeV.position.y = -wheelSpec.radius * 0.48;
+  steerWheel.add(wheelRim, wheelHub, wheelCap, spokeH, spokeV);
   group.add(steerWheel);
 
   // 2. Oversized 3D Superhero Driver (larger than the kart!)
@@ -919,15 +966,23 @@ export function createKartMesh(
       ? '#16a34a'
       : '#0f172a';
   const gloveMat = new THREE.MeshStandardMaterial({ color: gloveColor, roughness: 0.35 });
-  for (const ax of [-0.36, 0.36]) {
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.42, 4, 8), armMat);
-    arm.position.set(ax, 0.48, 0.32);
-    arm.rotation.x = Math.PI / 2.6;
-    arm.rotation.z = ax > 0 ? 0.25 : -0.25;
+  const upAxis = new THREE.Vector3(0, 1, 0);
+  const handLocalX = wheelSpec.radius / heroScale;
+  const handLocalY = (wheelSpec.y - driver.position.y) / heroScale;
+  const handLocalZ = (wheelSpec.z - driver.position.z) / heroScale;
+  for (const side of [-1, 1]) {
+    const shoulder = new THREE.Vector3(side * 0.35, 0.52, 0.02);
+    const handPos = new THREE.Vector3(side * handLocalX, handLocalY, handLocalZ);
+    const armDir = new THREE.Vector3().subVectors(handPos, shoulder);
+    const armLen = Math.max(0.2, armDir.length() - 0.16);
+
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, armLen, 4, 8), armMat);
+    arm.position.copy(shoulder).addScaledVector(armDir, 0.5);
+    arm.quaternion.setFromUnitVectors(upAxis, armDir.normalize());
     driver.add(arm);
 
     const glove = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), gloveMat);
-    glove.position.set(ax * 0.65, 0.28, 0.68);
+    glove.position.copy(handPos);
     driver.add(glove);
   }
 

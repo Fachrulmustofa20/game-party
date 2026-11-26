@@ -1,10 +1,11 @@
 import QRCode from 'qrcode';
-import { RefreshCw, createElement } from 'lucide';
+import { Plus, RefreshCw, createElement } from 'lucide';
 import { ControllerInputState } from '../net/BinaryProtocol';
 import { ConnectedPlayer, HostNetworkManager } from '../net/HostNetworkManager';
 import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer, TrackMapId } from '../sdk/GameSDK';
 import { KART_CHARACTERS, getKartCharacter } from '../sdk/KartCharacters';
 import { SPACE_CHARACTERS, getSpaceCharacter } from '../sdk/SpaceCharacters';
+import { SNAKE_CHARACTERS, getSnakeCharacter } from '../sdk/SnakeColors';
 import { KartGame } from '../games/kart/KartGame';
 import { SpaceDogfightGame } from '../games/dogfight/SpaceDogfightGame';
 import { PacGame } from '../games/pacman/PacGame';
@@ -36,6 +37,7 @@ export class PlatformApp {
   private remotePlayers: ConnectedPlayer[] = [];
   private bots: PlatformPlayer[] = [];
   private botLevel: BotLevel = 'medium';
+  private customMaxPlayers: number | null = null;
   private activeGame: PlatformGame | null = null;
   private games: PlatformGame[] = [
     new KartGame(),
@@ -52,6 +54,7 @@ export class PlatformApp {
   private playersGridEl: HTMLElement | null = null;
   private playerCountEl: HTMLElement | null = null;
   private playerMaxCountEl: HTMLElement | null = null;
+  private wakeLock: WakeLockSentinel | null = null;
 
   // Optional keyboard fallback for Player 1 testing on PC
   private keyState = {
@@ -103,10 +106,13 @@ export class PlatformApp {
 
   mount(): void {
     this.renderHub();
-    const savedCode = localStorage.getItem(ROOM_STORAGE_KEY) || undefined;
-    this.net.connect(savedCode);
     void this.fetchLanInfo();
     this.bindKeyboardFallback();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.activeGame !== null) {
+        void this.requestWakeLock();
+      }
+    });
   }
 
   private async fetchLanInfo(): Promise<void> {
@@ -156,7 +162,8 @@ export class PlatformApp {
   }
 
   private getSlotLimit(): number {
-    return (this.activeGame ?? this.selectedGame).maxPlayers;
+    const gameMax = (this.activeGame ?? this.selectedGame).maxPlayers;
+    return this.customMaxPlayers ? Math.min(gameMax, Math.max(1, this.customMaxPlayers)) : gameMax;
   }
 
   private getMergedPlayers(maxSlots = this.getSlotLimit()): PlatformPlayer[] {
@@ -244,14 +251,16 @@ export class PlatformApp {
 
   private getActiveRoster(): ReadonlyArray<{ id: string; name: string }> {
     const gameId = (this.activeGame ?? this.selectedGame).id;
-    return gameId === 'space-dogfight-2p' ? SPACE_CHARACTERS : KART_CHARACTERS;
+    if (gameId === 'space-dogfight-2p') return SPACE_CHARACTERS;
+    if (gameId === 'neon-serpent') return SNAKE_CHARACTERS;
+    return KART_CHARACTERS;
   }
 
   private getCharacterDisplayName(characterId: string | undefined, slot: number): string {
     const gameId = (this.activeGame ?? this.selectedGame).id;
-    return gameId === 'space-dogfight-2p'
-      ? getSpaceCharacter(characterId, slot).name
-      : getKartCharacter(characterId, slot).name;
+    if (gameId === 'space-dogfight-2p') return getSpaceCharacter(characterId, slot).name;
+    if (gameId === 'neon-serpent') return getSnakeCharacter(characterId, slot).name;
+    return getKartCharacter(characterId, slot).name;
   }
 
   private remapBotsToActiveRoster(): void {
@@ -274,41 +283,19 @@ export class PlatformApp {
 
   private renderHub(): void {
     this.root.innerHTML = `
-      <div class="hub-shell">
-        <aside class="hub-sidebar">
-          <div class="brand-title">
-            <span>GAMING PARTY</span>
-            <span class="brand-badge">Multiplayer 10P</span>
-          </div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.45;">
-            Scan QR Code dengan kamera HP (di Wi-Fi yang sama) untuk menjadikan HP sebagai controller latensi rendah.
-          </div>
-
-          <div class="qr-card">
-            <canvas id="qr-canvas"></canvas>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <div class="room-code-pill" id="room-code">----</div>
-              <button
-                id="btn-refresh-qr"
-                type="button"
-                title="Perbarui QR Code & Room"
-                aria-label="Perbarui QR Code & Room"
-                style="border:none;background:#e2e8f0;color:#0f172a;width:36px;height:36px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
-              ></button>
+      <div class="hub-landing">
+        <header class="hub-topbar">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div class="brand-title">
+              <img src="/gaming-party-icon.svg" alt="Gaming Party" style="width:34px;height:34px;border-radius:9px;display:block;" />
+              <span>GAMING PARTY</span>
+              <span class="brand-badge">Multiplayer 10P</span>
             </div>
-            <div class="join-url-text" id="join-url">Menghubungkan...</div>
-            <div id="network-label" style="font-size:11px;color:#0284c7;font-weight:700;">Mendeteksi Wi-Fi...</div>
+            <span style="font-size:13px;color:var(--muted);">
+              Pilih game di bawah untuk membuat Room &amp; QR Code controller HP
+            </span>
           </div>
-
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <button class="btn btn-secondary" id="btn-open-ctrl">
-              + Buka Controller Simulasi (Tab Baru)
-            </button>
-            <div id="bot-fill-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <button class="btn btn-secondary" id="btn-fill-4">Isi 4P (Bots)</button>
-              <button class="btn btn-secondary" id="btn-fill-10">Isi 10P (Bots)</button>
-            </div>
-            <button class="btn btn-danger" id="btn-clear-bots">Hapus Semua Bot</button>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <button
               class="btn"
               id="btn-donate"
@@ -320,47 +307,13 @@ export class PlatformApp {
               ? Bantuan &amp; Panduan
             </button>
           </div>
+        </header>
 
-          <div style="margin-top:auto;font-size:11px;color:var(--muted);border-top:1px solid var(--panel-border);padding-top:12px;">
-            <strong>Kontrol Keyboard PC (Opsional P1):</strong><br/>
-            W/A/S/D atau Panah = Stir & Gas<br/>
-            Space = Hop / Drift &bull; Shift = Turbo Boost &bull; E = Item
-          </div>
-        </aside>
-
-        <main class="hub-main">
+        <main class="hub-main" style="max-width:1360px;width:100%;margin:0 auto;">
           <div>
-            <div class="section-header" style="margin-bottom:12px;flex-wrap:wrap;gap:10px;">
-              <h2 class="section-title">Pemain Terhubung (<span id="player-count">0</span> / <span id="player-max-count">${this.selectedGame.maxPlayers}</span>)</h2>
-              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div id="ai-level-bar" class="ai-level-bar" style="display:none;">
-                  <span style="font-size:12px;color:var(--muted);font-weight:700;">Level Bot:</span>
-                  ${(
-                    [
-                      ['easy', 'Mudah'],
-                      ['medium', 'Sedang'],
-                      ['hard', 'Sulit'],
-                      ['god', 'Dewa'],
-                    ] as const
-                  )
-                    .map(
-                      ([lvl, label]) => `
-                    <button type="button" data-ai-level="${lvl}" class="btn ai-level-btn ${
-                        this.botLevel === lvl ? 'btn-primary' : 'btn-secondary'
-                      }">${label}</button>
-                  `
-                    )
-                    .join('')}
-                </div>
-              </div>
-            </div>
-            <div class="players-grid" id="players-grid"></div>
-          </div>
-
-          <div>
-            <div class="section-header" style="margin-bottom:12px;">
-              <h2 class="section-title">Pilih Game</h2>
-              <span style="font-size:12px;color:var(--muted);">Platform Multi-Game Modular</span>
+            <div class="section-header" style="margin-bottom:14px;">
+              <h2 class="section-title">Daftar Game Platform</h2>
+              <span style="font-size:12px;color:var(--muted);">Klik salah satu game untuk membuat Kode Room &amp; QR Code</span>
             </div>
             <div class="games-grid" id="games-grid"></div>
           </div>
@@ -368,56 +321,25 @@ export class PlatformApp {
       </div>
     `;
 
-    this.qrCanvas = this.root.querySelector('#qr-canvas');
-    this.roomCodeEl = this.root.querySelector('#room-code');
-    this.joinUrlEl = this.root.querySelector('#join-url');
-    this.networkLabelEl = this.root.querySelector('#network-label');
-    this.playersGridEl = this.root.querySelector('#players-grid');
-    this.playerCountEl = this.root.querySelector('#player-count');
-    this.playerMaxCountEl = this.root.querySelector('#player-max-count');
+    this.qrCanvas = null;
+    this.roomCodeEl = null;
+    this.joinUrlEl = null;
+    this.networkLabelEl = null;
+    this.playersGridEl = null;
+    this.playerCountEl = null;
+    this.playerMaxCountEl = null;
 
-    const refreshBtn = this.root.querySelector('#btn-refresh-qr');
-    if (refreshBtn) {
-      const iconEl = createElement(RefreshCw, { width: 18, height: 18, 'stroke-width': 2.5 });
-      refreshBtn.appendChild(iconEl);
-      refreshBtn.addEventListener('click', () => {
-        localStorage.removeItem(ROOM_STORAGE_KEY);
-        this.net.regenerateRoom();
-        void this.fetchLanInfo();
-      });
-    }
-    this.root.querySelector('#btn-open-ctrl')?.addEventListener('click', () => {
-      window.open(`/?mode=controller&room=${this.roomCode}`, '_blank');
-    });
-    this.root.querySelector('#btn-fill-4')?.addEventListener('click', () => this.addBotsToFill(4));
-    this.root.querySelector('#btn-fill-10')?.addEventListener('click', () => this.addBotsToFill(10));
-    this.root.querySelector('#btn-clear-bots')?.addEventListener('click', () => {
-      this.bots = [];
-      this.renderPlayersGrid();
-    });
     this.root.querySelector('#btn-donate')?.addEventListener('click', () => {
       window.open(DONATION_URL, '_blank', 'noopener,noreferrer');
     });
     this.root.querySelector('#btn-help')?.addEventListener('click', () => {
       this.showHelpModal();
     });
-    this.root.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const nextLevel = (btn.dataset.aiLevel || 'medium') as BotLevel;
-        this.botLevel = nextLevel;
-        this.bots = this.bots.map((b) => (b.isBot ? { ...b, botLevel: nextLevel } : b));
-        this.root.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((b) => {
-          b.className = `btn ai-level-btn ${b.dataset.aiLevel === nextLevel ? 'btn-primary' : 'btn-secondary'}`;
-        });
-        this.renderPlayersGrid();
-      });
-    });
 
     const gamesGrid = this.root.querySelector('#games-grid')!;
     for (const game of this.games) {
       const card = document.createElement('div');
-      card.className = `game-card${game.id === this.selectedGame.id ? ' selected' : ''}`;
-      card.style.cursor = 'pointer';
+      card.className = 'game-card';
       const lapSelectorHtml =
         game.id === 'nitro-kart-3d'
           ? `
@@ -476,7 +398,7 @@ export class PlatformApp {
         <h3>${game.title}</h3>
         <p>${game.subtitle}</p>
         ${lapSelectorHtml}
-        <button class="btn btn-primary btn-play" style="margin-top:auto;">Mainkan Sekarang</button>
+        <button class="btn btn-primary btn-play" style="margin-top:auto;">Buat Room</button>
       `;
 
       card.querySelectorAll<HTMLButtonElement>('[data-laps]').forEach((btn) => {
@@ -512,44 +434,329 @@ export class PlatformApp {
         });
       });
 
-      card.addEventListener('click', () => {
-        this.selectedGame = game;
-        gamesGrid.querySelectorAll('.game-card').forEach((c) => c.classList.remove('selected'));
-        card.classList.add('selected');
-        this.net.syncSelectedGame(game.id);
-        this.remapBotsToActiveRoster();
-        this.syncSlotLimitUi();
-        this.renderPlayersGrid();
-      });
-
       card.querySelector('.btn-play')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.selectedGame = game;
-        this.launchGame(game);
+        this.openRoomModal(game, true);
       });
       gamesGrid.appendChild(card);
     }
+  }
 
-    this.updateQrAndRoom();
+  private openRoomModal(game: PlatformGame, createNewConnection: boolean): void {
+    this.selectedGame = game;
+    this.root.querySelector('#room-lobby-modal')?.remove();
+
+    if (createNewConnection) {
+      this.roomCode = '----';
+      this.remotePlayers = [];
+      this.bots = [];
+      this.customMaxPlayers = game.maxPlayers;
+    } else {
+      this.customMaxPlayers = Math.min(
+        game.maxPlayers,
+        Math.max(1, this.customMaxPlayers ?? game.maxPlayers)
+      );
+      this.remapBotsToActiveRoster();
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'room-lobby-modal';
+    modal.className = 'room-modal-backdrop';
+    modal.innerHTML = `
+      <div class="room-modal-card">
+        <div class="room-modal-header">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span class="brand-badge" style="background:${game.accentColor};">${game.badge}</span>
+            <h2 style="margin:0;font-size:20px;font-weight:900;">${game.title} — Room Lobby</h2>
+          </div>
+          <button type="button" id="btn-close-room" class="btn btn-secondary" style="padding:6px 12px;font-size:13px;">✕ Tutup Room</button>
+        </div>
+
+        <div class="room-modal-body">
+          <div class="room-modal-left">
+            <div style="font-size:12px;color:var(--muted);line-height:1.45;">
+              Scan QR Code dengan kamera HP (di Wi-Fi yang sama), lalu klik <strong>Gabung</strong>, pilih karakter, dan klik <strong>READY</strong>.
+            </div>
+            <div class="qr-card">
+              <button
+                id="btn-refresh-qr"
+                type="button"
+                title="Perbarui QR Code & Room"
+                aria-label="Perbarui QR Code & Room"
+                style="position:absolute;top:10px;right:10px;border:none;background:#e2e8f0;color:#0f172a;width:32px;height:32px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+              ></button>
+              <canvas id="qr-canvas"></canvas>
+              <div class="room-code-pill" id="room-code">${this.roomCode}</div>
+              <div class="join-url-text" id="join-url">Menghubungkan...</div>
+              <div id="network-label" style="font-size:11px;color:#0284c7;font-weight:700;">Mendeteksi Wi-Fi...</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="max-players-card">
+                <div class="max-players-header">
+                  <span class="max-players-label">Maks Pemain</span>
+                  <span id="max-players-badge" class="max-players-badge">${this.getSlotLimit()} Pemain</span>
+                </div>
+                <div class="max-players-stepper">
+                  <button type="button" id="btn-max-dec" class="max-players-step-btn" aria-label="Kurangi Maks Pemain">−</button>
+                  <input id="inp-max-players" class="max-players-slider" type="range" min="1" max="${game.maxPlayers}" value="${this.getSlotLimit()}" />
+                  <button type="button" id="btn-max-inc" class="max-players-step-btn" aria-label="Tambah Maks Pemain">+</button>
+                </div>
+                <div class="max-players-presets">
+                  ${[2, 4, 6, 8, 10]
+                    .filter((n) => n <= game.maxPlayers)
+                    .map(
+                      (n) => `
+                    <button type="button" data-max-preset="${n}" class="max-players-chip ${
+                        this.getSlotLimit() === n ? 'active' : ''
+                      }">${n}P</button>
+                  `
+                    )
+                    .join('')}
+                </div>
+              </div>
+              <button class="btn btn-secondary" id="btn-open-ctrl">
+                + Buka Controller Simulasi (Tab Baru)
+              </button>
+              <div id="bot-fill-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button class="btn btn-secondary" id="btn-fill-4">Isi 4P (Bots)</button>
+                <button class="btn btn-secondary" id="btn-fill-10">Isi 10P (Bots)</button>
+              </div>
+              <button class="btn btn-danger" id="btn-clear-bots">Hapus Semua Bot</button>
+            </div>
+          </div>
+
+          <div class="room-modal-right">
+            <div class="section-header" style="flex-wrap:wrap;gap:10px;">
+              <h3 class="section-title">Pemain di Room (<span id="player-count">0</span> / <span id="player-max-count">${game.maxPlayers}</span>)</h3>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span id="ready-summary" class="ready-summary-pill">Menunggu pemain...</span>
+                <div id="ai-level-bar" class="ai-level-bar" style="display:none;">
+                  <span style="font-size:12px;color:var(--muted);font-weight:700;">Level Bot:</span>
+                  ${(
+                    [
+                      ['easy', 'Mudah'],
+                      ['medium', 'Sedang'],
+                      ['hard', 'Sulit'],
+                      ['god', 'Dewa'],
+                    ] as const
+                  )
+                    .map(
+                      ([lvl, label]) => `
+                    <button type="button" data-ai-level="${lvl}" class="btn ai-level-btn ${
+                        this.botLevel === lvl ? 'btn-primary' : 'btn-secondary'
+                      }">${label}</button>
+                  `
+                    )
+                    .join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="players-grid" id="players-grid"></div>
+
+            <div class="room-modal-footer">
+              <div id="start-status-text" style="font-size:13px;color:var(--muted);font-weight:600;"></div>
+              <button type="button" id="btn-start-game" class="btn btn-primary" style="padding:12px 24px;font-size:15px;">
+                Mulai Game
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.root.appendChild(modal);
+
+    this.qrCanvas = modal.querySelector('#qr-canvas');
+    this.roomCodeEl = modal.querySelector('#room-code');
+    this.joinUrlEl = modal.querySelector('#join-url');
+    this.networkLabelEl = modal.querySelector('#network-label');
+    this.playersGridEl = modal.querySelector('#players-grid');
+    this.playerCountEl = modal.querySelector('#player-count');
+    this.playerMaxCountEl = modal.querySelector('#player-max-count');
+
+    const refreshBtn = modal.querySelector('#btn-refresh-qr');
+    if (refreshBtn) {
+      const iconEl = createElement(RefreshCw, { width: 18, height: 18, 'stroke-width': 2.5 });
+      refreshBtn.appendChild(iconEl);
+      refreshBtn.addEventListener('click', () => {
+        localStorage.removeItem(ROOM_STORAGE_KEY);
+        this.net.regenerateRoom();
+        void this.fetchLanInfo();
+      });
+    }
+
+    modal.querySelector('#btn-close-room')?.addEventListener('click', () => {
+      this.closeRoomModal();
+    });
+
+    const maxInput = modal.querySelector('#inp-max-players') as HTMLInputElement | null;
+    modal.querySelector('#btn-max-dec')?.addEventListener('click', () => {
+      this.setCustomMaxPlayers(this.getSlotLimit() - 1);
+    });
+    modal.querySelector('#btn-max-inc')?.addEventListener('click', () => {
+      this.setCustomMaxPlayers(this.getSlotLimit() + 1);
+    });
+    maxInput?.addEventListener('input', () => {
+      this.setCustomMaxPlayers(Number(maxInput.value || game.maxPlayers));
+    });
+    modal.querySelectorAll<HTMLButtonElement>('[data-max-preset]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        this.setCustomMaxPlayers(Number(chip.dataset.maxPreset || game.maxPlayers));
+      });
+    });
+
+    modal.querySelector('#btn-open-ctrl')?.addEventListener('click', () => {
+      window.open(`/?mode=controller&room=${this.roomCode}`, '_blank');
+    });
+    modal.querySelector('#btn-fill-4')?.addEventListener('click', () => this.addBotsToFill(4));
+    modal.querySelector('#btn-fill-10')?.addEventListener('click', () => this.addBotsToFill(this.getSlotLimit()));
+    modal.querySelector('#btn-clear-bots')?.addEventListener('click', () => {
+      this.bots = [];
+      this.renderPlayersGrid();
+    });
+    modal.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const nextLevel = (btn.dataset.aiLevel || 'medium') as BotLevel;
+        this.botLevel = nextLevel;
+        this.bots = this.bots.map((b) => (b.isBot ? { ...b, botLevel: nextLevel } : b));
+        modal.querySelectorAll<HTMLButtonElement>('[data-ai-level]').forEach((b) => {
+          b.className = `btn ai-level-btn ${b.dataset.aiLevel === nextLevel ? 'btn-primary' : 'btn-secondary'}`;
+        });
+        this.renderPlayersGrid();
+      });
+    });
+    modal.querySelector('#btn-start-game')?.addEventListener('click', () => {
+      if (!this.canStartGame()) return;
+      this.launchGame(this.selectedGame);
+    });
+
+    if (createNewConnection) {
+      localStorage.removeItem(ROOM_STORAGE_KEY);
+      this.net.connect();
+      void this.fetchLanInfo();
+    } else {
+      this.net.syncSelectedGame(game.id);
+      this.updateQrAndRoom();
+    }
+
+    this.syncSlotLimitUi();
+    this.renderPlayersGrid();
+  }
+
+  private closeRoomModal(): void {
+    localStorage.removeItem(ROOM_STORAGE_KEY);
+    this.net.closeRoom();
+    this.remotePlayers = [];
+    this.bots = [];
+    this.roomCode = '----';
+    this.root.querySelector('#room-lobby-modal')?.remove();
+    this.qrCanvas = null;
+    this.roomCodeEl = null;
+    this.joinUrlEl = null;
+    this.networkLabelEl = null;
+    this.playersGridEl = null;
+    this.playerCountEl = null;
+    this.playerMaxCountEl = null;
+  }
+
+  private canStartGame(): boolean {
+    const merged = this.getMergedPlayers();
+    if (merged.length === 0) return false;
+    const connectedHumans = this.remotePlayers.filter((p) => p.connected);
+    if (connectedHumans.length === 0) return true;
+    return connectedHumans.every((p) => p.ready);
+  }
+
+  private updateStartButtonState(): void {
+    const startBtn = this.root.querySelector('#btn-start-game') as HTMLButtonElement | null;
+    const statusText = this.root.querySelector('#start-status-text') as HTMLElement | null;
+    const summaryEl = this.root.querySelector('#ready-summary') as HTMLElement | null;
+    if (!startBtn || !statusText) return;
+
+    const merged = this.getMergedPlayers();
+    const connectedHumans = this.remotePlayers.filter((p) => p.connected);
+    const readyCount = connectedHumans.filter((p) => p.ready).length;
+
+    if (merged.length === 0) {
+      startBtn.disabled = true;
+      statusText.textContent = 'Belum ada pemain di dalam room. Scan QR Code untuk bergabung atau isi Bots.';
+      if (summaryEl) {
+        summaryEl.textContent = 'Belum ada pemain';
+        summaryEl.className = 'ready-summary-pill waiting';
+      }
+      return;
+    }
+
+    if (connectedHumans.length === 0) {
+      startBtn.disabled = false;
+      statusText.textContent = 'Mode Solo Keyboard PC / Bots siap dimulai.';
+      if (summaryEl) {
+        summaryEl.textContent = 'Mode Solo / Bots';
+        summaryEl.className = 'ready-summary-pill ready';
+      }
+      return;
+    }
+
+    const allReady = readyCount === connectedHumans.length;
+    startBtn.disabled = !allReady;
+    if (allReady) {
+      statusText.textContent = `Semua pemain (${readyCount}/${connectedHumans.length}) sudah READY! Klik Mulai Game.`;
+      if (summaryEl) {
+        summaryEl.textContent = `${readyCount}/${connectedHumans.length} Siap`;
+        summaryEl.className = 'ready-summary-pill ready';
+      }
+    } else {
+      statusText.textContent = `Menunggu semua pemain di room klik READY (${readyCount}/${connectedHumans.length} siap).`;
+      if (summaryEl) {
+        summaryEl.textContent = `${readyCount}/${connectedHumans.length} Siap`;
+        summaryEl.className = 'ready-summary-pill waiting';
+      }
+    }
+  }
+
+  private setCustomMaxPlayers(nextVal: number): void {
+    const game = this.selectedGame;
+    const clamped = Math.min(game.maxPlayers, Math.max(1, Math.round(nextVal)));
+    this.customMaxPlayers = clamped;
+
+    const modal = this.root.querySelector('#room-lobby-modal');
+    if (modal) {
+      const maxInput = modal.querySelector('#inp-max-players') as HTMLInputElement | null;
+      const maxBadge = modal.querySelector('#max-players-badge') as HTMLElement | null;
+      if (maxInput) maxInput.value = String(clamped);
+      if (maxBadge) maxBadge.textContent = `${clamped} Pemain`;
+      modal.querySelectorAll<HTMLButtonElement>('[data-max-preset]').forEach((chip) => {
+        chip.classList.toggle('active', Number(chip.dataset.maxPreset) === clamped);
+      });
+    }
+
+    const humansCount = this.remotePlayers.filter((p) => p.connected).length;
+    const maxBotsAllowed = Math.max(0, clamped - humansCount);
+    if (this.bots.length > maxBotsAllowed) {
+      this.bots = this.bots.slice(0, maxBotsAllowed);
+    }
     this.syncSlotLimitUi();
     this.renderPlayersGrid();
   }
 
   private syncSlotLimitUi(): void {
-    const maxSlots = this.selectedGame.maxPlayers;
+    const maxSlots = this.getSlotLimit();
     if (this.playerMaxCountEl) this.playerMaxCountEl.textContent = String(maxSlots);
 
     const botFillGrid = this.root.querySelector('#bot-fill-grid') as HTMLElement | null;
     const btnFill4 = this.root.querySelector('#btn-fill-4') as HTMLButtonElement | null;
     const btnFill10 = this.root.querySelector('#btn-fill-10') as HTMLButtonElement | null;
     if (botFillGrid) {
-      botFillGrid.style.gridTemplateColumns = maxSlots >= 10 ? '1fr 1fr' : '1fr';
+      botFillGrid.style.gridTemplateColumns = maxSlots > 4 ? '1fr 1fr' : '1fr';
     }
     if (btnFill4) {
       btnFill4.textContent = `Isi ${Math.min(4, maxSlots)}P (Bots)`;
     }
     if (btnFill10) {
-      btnFill10.style.display = maxSlots >= 10 ? '' : 'none';
+      btnFill10.textContent = `Isi ${maxSlots}P (Bots)`;
+      btnFill10.style.display = maxSlots > 4 ? '' : 'none';
     }
   }
 
@@ -569,7 +776,7 @@ export class PlatformApp {
     if (this.playerMaxCountEl) this.playerMaxCountEl.textContent = String(maxSlots);
 
     this.playersGridEl.style.gridTemplateColumns =
-      maxSlots <= 2 ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))';
+      maxSlots <= 2 ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(175px, 1fr))';
 
     const bySlot = new Map(merged.map((p) => [p.slot, p]));
     const hasAi = merged.some((p) => p.isBot);
@@ -609,7 +816,16 @@ export class PlatformApp {
             ? 'WS Relay'
             : 'Connecting...';
         const pingLabel = p.isBot ? '0 ms' : `${p.pingMs} ms`;
-        const charName = this.getCharacterDisplayName(p.characterId, slot);
+        const charName = p.characterId
+          ? this.getCharacterDisplayName(p.characterId, slot)
+          : 'Memilih karakter...';
+        const remoteMatch = !p.isBot && p.id !== 'local_p1'
+          ? this.remotePlayers.find((rp) => rp.id === p.id)
+          : undefined;
+        const isReady = p.isBot || p.id === 'local_p1' ? true : Boolean(remoteMatch?.ready);
+        const readyBadge = isReady
+          ? '<span class="slot-ready-badge ready">SIAP</span>'
+          : '<span class="slot-ready-badge waiting">BELUM SIAP</span>';
 
         cell.innerHTML = `
           <div class="slot-top">
@@ -617,7 +833,10 @@ export class PlatformApp {
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">P${slot + 1} ${p.name}</span>
             <button type="button" class="slot-delete-btn" title="Hapus ${p.name}" aria-label="Hapus ${p.name}">✕</button>
           </div>
-          <div style="font-size:11px;color:var(--muted);">${charName}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;">
+            <span style="font-size:11px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${charName}</span>
+            ${readyBadge}
+          </div>
           <div class="slot-meta">
             <span class="${badgeClass}">${badgeLabel}</span>
             <span>${pingLabel}</span>
@@ -630,6 +849,27 @@ export class PlatformApp {
       }
       this.playersGridEl.appendChild(cell);
     }
+
+    if (maxSlots < this.selectedGame.maxPlayers) {
+      const addCell = document.createElement('button');
+      addCell.type = 'button';
+      addCell.className = 'player-slot add-slot';
+      addCell.title = `Tambah Maks Slot ke ${maxSlots + 1}`;
+      addCell.setAttribute('aria-label', `Tambah Maks Slot ke ${maxSlots + 1}`);
+      const plusWrap = document.createElement('span');
+      plusWrap.className = 'slot-plus-icon';
+      plusWrap.appendChild(createElement(Plus, { width: 16, height: 16, 'stroke-width': 2.5 }));
+      const label = document.createElement('span');
+      label.textContent = `Tambah Slot (P${maxSlots + 1})`;
+      addCell.appendChild(plusWrap);
+      addCell.appendChild(label);
+      addCell.addEventListener('click', () => {
+        this.setCustomMaxPlayers(maxSlots + 1);
+      });
+      this.playersGridEl.appendChild(addCell);
+    }
+
+    this.updateStartButtonState();
   }
 
   private removePlayer(player: PlatformPlayer): void {
@@ -682,6 +922,7 @@ export class PlatformApp {
     }
 
     this.activeGame = game;
+    void this.requestWakeLock();
     this.root.innerHTML = '';
     const stage = document.createElement('div');
     stage.className = 'game-stage';
@@ -727,8 +968,44 @@ export class PlatformApp {
       this.activeGame.unmount();
       this.activeGame = null;
     }
+    void this.releaseWakeLock();
     this.net.sendReliableEvent('*', { type: 'returned_to_hub' });
+    this.net.resetPlayersReady();
+    const hasConnectedHumans = this.remotePlayers.some((p) => p.connected);
     this.renderHub();
+    if (hasConnectedHumans) {
+      this.openRoomModal(this.selectedGame, false);
+    } else {
+      this.net.closeRoom();
+      this.remotePlayers = [];
+      this.bots = [];
+      this.roomCode = '----';
+    }
+  }
+
+  private async requestWakeLock(): Promise<void> {
+    if (this.wakeLock && !this.wakeLock.released) return;
+    try {
+      const sentinel = await navigator.wakeLock?.request('screen');
+      if (sentinel) {
+        this.wakeLock = sentinel;
+        sentinel.addEventListener('release', () => {
+          if (this.wakeLock === sentinel) this.wakeLock = null;
+        });
+      }
+    } catch {
+      // Ignore if unsupported
+    }
+  }
+
+  private async releaseWakeLock(): Promise<void> {
+    try {
+      await this.wakeLock?.release();
+    } catch {
+      // Ignore
+    } finally {
+      this.wakeLock = null;
+    }
   }
 
   private showHelpModal(): void {
@@ -776,7 +1053,7 @@ export class PlatformApp {
           <div>
             <div style="font-size:12px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Tentang Developer</div>
             <div style="font-size:16px;font-weight:900;color:#f8fafc;margin-top:2px;">Fachrul Mustofa</div>
-            <div style="font-size:13px;color:#cbd5e1;margin-top:2px;">Kreator Nitro Party Platform — Multiplayer WebRTC &amp; 3D Web Game.</div>
+            <div style="font-size:13px;color:#cbd5e1;margin-top:2px;">Kreator Gaming Party Platform — Multiplayer WebRTC &amp; 3D Web Game.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a href="${DEVELOPER_URL}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="text-decoration:none;">Kunjungi Website</a>

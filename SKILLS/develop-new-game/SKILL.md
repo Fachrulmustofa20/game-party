@@ -1,11 +1,11 @@
 ---
 name: nitro-party-game-dev
-description: Architecture guide and step-by-step workflow for AI agents to understand the Nitro Party Platform codebase and add new multiplayer games, custom smartphone controllers, and per-game audio engines without modifying core networking or platform files.
+description: Architecture guide and step-by-step workflow for AI agents to understand the Gaming Party Platform codebase and add new multiplayer games, custom smartphone controllers, and per-game audio engines without modifying core networking or platform files.
 ---
 
-# Nitro Party Platform — Game Development Skill
+# Gaming Party Platform — Game Development Skill
 
-Use this skill whenever you need to understand the **Nitro Party Platform** architecture or add a new game, custom smartphone controller, or per-game audio synthesizer.
+Use this skill whenever you need to understand the **Gaming Party Platform** architecture or add a new game, custom smartphone controller, or per-game audio synthesizer.
 
 ## 1. Core Design Principle: Plug-and-Play Extension
 

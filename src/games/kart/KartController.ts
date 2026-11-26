@@ -31,7 +31,7 @@ export class KartController implements GameControllerView {
 
   private touchSteer = 0;
   private analogBrake = false;
-  private dpadMode = false;
+  private dpadMode = localStorage.getItem('kart_steer_mode') === 'dpad';
   private dpadState = { down: false, left: false, right: false };
   private buttons = {
     gas: false,
@@ -89,10 +89,6 @@ export class KartController implements GameControllerView {
         <div class="center-hud">
           <div style="display:flex;justify-content:space-between;width:100%;font-size:11px;align-items:center;gap:6px;">
             <span style="font-weight:900;color:${ctx.color};">P${ctx.slot + 1}</span>
-            <button id="btn-fs" class="btn btn-secondary ctrl-top-btn" style="padding:3px 8px;font-size:10px;">
-              ${CTRL_SVG_ICONS.fullscreen}
-              <span>Fullscreen</span>
-            </button>
             <span id="status-badge" class="badge-ws">Connecting...</span>
           </div>
 
@@ -205,6 +201,7 @@ export class KartController implements GameControllerView {
 
     switchBtn?.addEventListener('click', () => {
       this.dpadMode = !this.dpadMode;
+      localStorage.setItem('kart_steer_mode', this.dpadMode ? 'dpad' : 'analog');
       this.touchSteer = 0;
       this.analogBrake = false;
       this.dpadState = { down: false, left: false, right: false };

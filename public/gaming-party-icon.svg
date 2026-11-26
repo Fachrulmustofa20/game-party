@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="gp-bg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#15223d"/>
+      <stop offset="100%" stop-color="#080c17"/>
+    </linearGradient>
+    <linearGradient id="gp-accent" x1="20" y1="36" x2="108" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ff6b2b"/>
+      <stop offset="55%" stop-color="#ff9f1c"/>
+      <stop offset="100%" stop-color="#00e5ff"/>
+    </linearGradient>
+    <linearGradient id="gp-spark" x1="56" y1="12" x2="76" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#ff6b2b"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#gp-bg)" stroke="url(#gp-accent)" stroke-width="4"/>
+
+  <!-- Party Sparkle / Crown -->
+  <path d="M64 14L68.5 23.5L78 28L68.5 32.5L64 42L59.5 32.5L50 28L59.5 23.5L64 14Z" fill="url(#gp-spark)"/>
+  <circle cx="38" cy="28" r="3" fill="#00e5ff"/>
+  <circle cx="90" cy="28" r="3" fill="#ff6b2b"/>
+
+  <!-- Gamepad Body -->
+  <path
+    d="M36 52C26.5 52 19 60.5 18 71.5L16.2 89.5C15.5 96.5 21 102 27.5 102C32 102 35.8 99.4 38.4 95.4L44.5 86H83.5L89.6 95.4C92.2 99.4 96 102 100.5 102C107 102 112.5 96.5 111.8 89.5L110 71.5C109 60.5 101.5 52 92 52H36Z"
+    fill="#111829"
+    stroke="url(#gp-accent)"
+    stroke-width="4.5"
+    stroke-linejoin="round"
+  />
+
+  <!-- D-Pad -->
+  <path d="M36 62V78M28 70H44" stroke="#f8fafc" stroke-width="5.5" stroke-linecap="round"/>
+
+  <!-- Action Buttons -->
+  <circle cx="88" cy="63" r="4" fill="#00e5ff"/>
+  <circle cx="96" cy="71" r="4" fill="#ff6b2b"/>
+  <circle cx="80" cy="71" r="4" fill="#facc15"/>
+  <circle cx="88" cy="79" r="4" fill="#22c55e"/>
+
+  <!-- Center Party Badge -->
+  <rect x="57" y="67" width="14" height="6" rx="3" fill="#94a3b8"/>
+</svg>
