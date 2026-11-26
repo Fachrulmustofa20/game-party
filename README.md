@@ -299,6 +299,22 @@ const CONTROLLER_FACTORIES: Record<string, () => GameControllerView> = {
 
 > **Important:** The key in `CONTROLLER_FACTORIES` must match `PlatformGame.id` exactly.
 
+### Step 5 (Optional): Custom Character Selection (`GameCharacterView`)
+
+If your game does not register a custom character view, the controller automatically falls back to `DefaultCharacterView` (`src/controller/DefaultCharacterView.ts`), which lets players pick from 10 colored character avatars (`src/sdk/DefaultCharacters.ts`).
+
+To give your game custom characters (e.g. `KartCharacterView`, `PacCharacterView`, `SpaceCharacterView`, `SerpentCharacterView`):
+
+1. Create `src/games/<game-slug>/<Name>CharacterView.ts` implementing `GameCharacterView` (`src/controller/GameCharacterView.ts`) — you can use the `mountStandardCharacterPicker(...)` helper or render custom HTML.
+2. Register your `game.id` in `src/sdk/CharacterRegistry.ts`:
+
+```ts
+const CHARACTER_VIEW_FACTORIES: Record<string, () => GameCharacterView> = {
+  'nitro-kart-3d': () => new KartCharacterView(),
+  'bomber-party': () => new BomberCharacterView(), // <-- Optional custom character view
+};
+```
+
 ---
 
 ## Binary Protocol Reference
