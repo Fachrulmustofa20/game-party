@@ -115,6 +115,22 @@ body,
   align-items: center;
 }
 
+.ai-level-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(17, 24, 41, 0.85);
+  border: 1px solid var(--panel-border);
+}
+
+.ai-level-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 .section-title {
   font-size: 18px;
   font-weight: 800;
@@ -445,11 +461,12 @@ body,
 
 .character-picker-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
 .character-card {
+  position: relative;
   background: #070b14;
   border: 2px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
@@ -469,9 +486,85 @@ body,
   transform: scale(1.03);
 }
 
+.character-card.taken {
+  opacity: 0.42;
+  filter: grayscale(0.75);
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.character-taken-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 5px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
 .character-emoji {
   font-size: 20px;
   line-height: 1.1;
+}
+
+.selected-char-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(7, 11, 20, 0.9);
+  border: 2px solid var(--accent);
+}
+
+.selected-char-visuals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.selected-char-visuals .hero-preview-svg {
+  width: 46px;
+  height: 44px;
+}
+
+.selected-char-visuals .car-preview-svg {
+  width: 78px;
+  max-width: 78px;
+  height: 42px;
+}
+
+.selected-char-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 0;
+}
+
+.selected-char-name {
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.selected-char-car {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.hero-preview-svg {
+  width: 42px;
+  height: 40px;
+  display: block;
 }
 
 .car-preview-svg {
@@ -536,6 +629,118 @@ body,
   border: 2px solid rgba(255, 255, 255, 0.22);
   position: relative;
   touch-action: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dpad-grid {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 50px;
+  gap: 8px;
+  touch-action: none;
+}
+
+.dpad-btn {
+  width: 100%;
+  height: 100%;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #1e293b, #0f172a);
+  color: #f8fafc;
+  font-size: 30px;
+  font-weight: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  cursor: pointer;
+  touch-action: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 5px 0 rgba(0, 0, 0, 0.5);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.1s ease;
+}
+
+.dpad-btn.pressed {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 0 rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, #22c55e, #15803d);
+  border-color: rgba(74, 222, 128, 0.8);
+}
+
+.dpad-down.pressed {
+  background: linear-gradient(180deg, #ef4444, #991b1b);
+  border-color: rgba(252, 165, 165, 0.85);
+}
+
+.dpad-sub {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  opacity: 0.92;
+}
+
+.dpad-left {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.dpad-right {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.dpad-down {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  flex-direction: row;
+  gap: 8px;
+  font-size: 18px;
+  border-radius: 14px;
+}
+
+.analog-mode-switch {
+  width: 100%;
+  min-block-size: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(15, 23, 42, 0.9);
+  color: #cbd5e1;
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.analog-mode-switch.active {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(74, 222, 128, 0.7);
+  color: #bbf7d0;
+}
+
+.analog-switch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #64748b;
+  flex-shrink: 0;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.analog-mode-switch.active .analog-switch-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.85);
 }
 
 .analog-knob {

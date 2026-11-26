@@ -16,7 +16,7 @@ export interface ControllerNetworkCallbacks {
   onTransportChanged: (mode: TransportMode) => void;
   onReliableEvent: (event: Record<string, unknown>) => void;
   onTelemetry: (telemetry: TelemetryPacket) => void;
-  onError: (message: string) => void;
+  onError: (message: string, takenCharacters?: string[]) => void;
 }
 
 export class ControllerNetworkClient {
@@ -69,7 +69,10 @@ export class ControllerNetworkClient {
       }
 
       if (msg.type === 'error') {
-        this.callbacks.onError(String(msg.message));
+        const taken = Array.isArray(msg.takenCharacters)
+          ? (msg.takenCharacters as string[])
+          : undefined;
+        this.callbacks.onError(String(msg.message), taken);
       } else if (msg.type === 'joined_room') {
         if (msg.sessionToken) {
           sessionStorage.setItem(sessionKey, String(msg.sessionToken));

@@ -38,6 +38,7 @@ interface Room {
   code: string;
   hostWs: WebSocket | null;
   players: Map<string, PlayerSession>;
+  botCharacters: string[];
   createdAt: number;
 }
 
@@ -98,6 +99,16 @@ function getLanIPv4Interfaces(): LanInterfaceInfo[] {
   return candidates;
 }
 
+function getTakenCharacters(room: Room, excludeSessionToken?: string): string[] {
+  const taken = new Set<string>(room.botCharacters);
+  for (const p of room.players.values()) {
+    if (!p.connected || !p.characterId) continue;
+    if (excludeSessionToken && p.sessionToken === excludeSessionToken) continue;
+    taken.add(p.characterId);
+  }
+  return Array.from(taken);
+}
+
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -125,6 +136,16 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    return;
+  }
+  if (req.url?.startsWith('/api/room-characters')) {
+    const u = new URL(req.url, 'http://localhost');
+    const code = (u.searchParams.get('room') || '').trim().toUpperCase();
+    const room = rooms.get(code);
+    const exists = Boolean(room && room.hostWs);
+    const takenCharacters = exists && room ? getTakenCharacters(room) : [];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ exists, takenCharacters }));
     return;
   }
 
@@ -213,6 +234,7 @@ wss.on('connection', (ws) => {
         code,
         hostWs: ws,
         players: new Map(),
+        botCharacters: [],
         createdAt: Date.now(),
       });
       sendJson(ws, { type: 'room_created', roomCode: code });
@@ -240,6 +262,21 @@ wss.on('connection', (ws) => {
             existing = p;
             break;
           }
+        }
+      }
+
+      if (characterId) {
+        const conflictHuman = Array.from(room.players.values()).find(
+          (p) => p.connected && p.characterId === characterId && p.id !== existing?.id
+        );
+        const conflictBot = room.botCharacters.includes(characterId);
+        if (conflictHuman || conflictBot) {
+          sendJson(ws, {
+            type: 'error',
+            message: 'Karakter tersebut sudah dipakai pemain lain atau AI! Silakan pilih karakter lain.',
+            takenCharacters: getTakenCharacters(room, sessionToken || undefined),
+          });
+          return;
         }
       }
 
@@ -329,6 +366,17 @@ wss.on('connection', (ws) => {
         color: newPlayer.color,
         characterId: newPlayer.characterId,
       });
+      return;
+    }
+
+    if (type === 'sync_bots' && roomCode && role === 'host') {
+      const room = rooms.get(roomCode);
+      if (!room) return;
+      room.botCharacters = Array.isArray(msg.characterIds)
+        ? msg.characterIds
+            .filter((c): c is string => typeof c === 'string' && c.length > 0)
+            .map((c) => c.slice(0, 24))
+        : [];
       return;
     }
 

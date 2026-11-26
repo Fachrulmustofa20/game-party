@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ControllerInputState } from '../../net/BinaryProtocol';
-import { getKartCharacter } from '../../sdk/KartCharacters';
+import { BotLevel } from '../../sdk/GameSDK';
+import { DriverTheme, getKartCharacter } from '../../sdk/KartCharacters';
 import { TrackBuilder } from './TrackBuilder';
 
 export interface KartState {
@@ -9,6 +10,7 @@ export interface KartState {
   name: string;
   color: string;
   isBot: boolean;
+  botLevel?: BotLevel;
   position: THREE.Vector3;
   heading: number; // radians
   speed: number; // m/s
@@ -91,8 +93,8 @@ function createNameplateSprite(name: string, accentColor: string): THREE.Sprite 
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
   const sprite = new THREE.Sprite(mat);
-  sprite.position.set(0, 3.2, 0);
-  sprite.scale.set(3.4, 0.85, 1);
+  sprite.position.set(0, 4.45, 0);
+  sprite.scale.set(3.6, 0.9, 1);
   return sprite;
 }
 
@@ -120,8 +122,8 @@ function createWrongWaySprite(): THREE.Sprite {
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
   const sprite = new THREE.Sprite(mat);
-  sprite.position.set(0, 4.08, 0);
-  sprite.scale.set(3.2, 0.85, 1);
+  sprite.position.set(0, 5.35, 0);
+  sprite.scale.set(3.4, 0.9, 1);
   sprite.visible = false;
   return sprite;
 }
@@ -129,54 +131,462 @@ function createWrongWaySprite(): THREE.Sprite {
 function createKartLiveryTexture(
   baseColor: string,
   accentColor: string,
-  slot: number
+  slot: number,
+  driverTheme: DriverTheme
 ): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 256;
   const ctx = c.getContext('2d')!;
 
-  ctx.fillStyle = baseColor;
+  const fillBase =
+    driverTheme === 'batman'
+      ? '#0f172a'
+      : driverTheme === 'spiderman' ||
+        driverTheme === 'ironman' ||
+        driverTheme === 'flash' ||
+        driverTheme === 'deadpool'
+      ? '#b91c1c'
+      : driverTheme === 'captain' || driverTheme === 'superman'
+      ? '#1d4ed8'
+      : driverTheme === 'hulk'
+      ? '#15803d'
+      : driverTheme === 'panther'
+      ? '#111827'
+      : baseColor;
+  ctx.fillStyle = fillBase;
   ctx.fillRect(0, 0, 256, 256);
 
-  // Subtle carbon-fiber / metallic weave
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  // Carbon-fiber / metallic weave texture
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
   for (let y = 0; y < 256; y += 8) {
-    for (let x = (y % 16 === 0 ? 0 : 4); x < 256; x += 8) {
+    for (let x = y % 16 === 0 ? 0 : 4; x < 256; x += 8) {
       ctx.fillRect(x, y, 4, 4);
     }
   }
 
-  // Dual Racing Stripes
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(102, 0, 18, 256);
-  ctx.fillRect(136, 0, 18, 256);
-  ctx.fillStyle = accentColor;
-  ctx.fillRect(120, 0, 16, 256);
+  // Theme-specific superhero car livery skin overlays
+  if (driverTheme === 'spiderman') {
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.72)';
+    ctx.lineWidth = 2.5;
+    for (let r = 24; r <= 128; r += 26) {
+      ctx.beginPath();
+      ctx.arc(128, 128, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    for (let a = 0; a < 12; a++) {
+      const ang = (a / 12) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(128, 128);
+      ctx.lineTo(128 + Math.cos(ang) * 160, 128 + Math.sin(ang) * 160);
+      ctx.stroke();
+    }
+  } else if (driverTheme === 'batman') {
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(92, 0, 10, 256);
+    ctx.fillRect(154, 0, 10, 256);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(102, 0, 52, 256);
+  } else if (driverTheme === 'ironman') {
+    // Gold titanium armor plates
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(34, 24, 44, 208);
+    ctx.fillRect(178, 24, 44, 208);
+  } else if (driverTheme === 'captain') {
+    // Red & white star-spangled stripes
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(0, 0, 42, 256);
+    ctx.fillRect(214, 0, 42, 256);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(42, 0, 24, 256);
+    ctx.fillRect(190, 0, 24, 256);
+  } else if (driverTheme === 'panther') {
+    // Glowing Wakanda Vibranium purple circuit lines
+    ctx.strokeStyle = '#a855f7';
+    ctx.lineWidth = 4;
+    for (let y = 32; y < 256; y += 56) {
+      ctx.beginPath();
+      ctx.moveTo(12, y);
+      ctx.lineTo(74, y + 18);
+      ctx.lineTo(182, y + 18);
+      ctx.lineTo(244, y);
+      ctx.stroke();
+    }
+  } else if (driverTheme === 'flash' || driverTheme === 'thor') {
+    // Lightning bolt streaks
+    ctx.fillStyle = driverTheme === 'flash' ? '#facc15' : '#38bdf8';
+    ctx.beginPath();
+    ctx.moveTo(64, 16);
+    ctx.lineTo(28, 128);
+    ctx.lineTo(58, 128);
+    ctx.lineTo(36, 240);
+    ctx.lineTo(86, 112);
+    ctx.lineTo(54, 112);
+    ctx.closePath();
+    ctx.fill();
+  }
 
-  // Panel seam lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 3;
+  // Dual Racing Stripes
+  if (driverTheme !== 'batman') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(102, 0, 16, 256);
+    ctx.fillRect(138, 0, 16, 256);
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(118, 0, 20, 256);
+  }
+
+  // Metallic panel seam lines & rivets
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 4;
   ctx.strokeRect(6, 6, 244, 244);
 
-  // Racing Number Badge
+  // Hero Emblem Badge
   ctx.beginPath();
   ctx.arc(128, 128, 34, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle =
+    driverTheme === 'batman' || driverTheme === 'flash'
+      ? '#facc15'
+      : driverTheme === 'panther'
+      ? '#a855f7'
+      : '#ffffff';
   ctx.fill();
   ctx.lineWidth = 4;
   ctx.strokeStyle = '#0f172a';
   ctx.stroke();
 
-  ctx.fillStyle = '#0f172a';
-  ctx.font = '900 36px Inter, system-ui, sans-serif';
+  const badgeIcon: Record<DriverTheme, string> = {
+    batman: '🦇',
+    spiderman: '🕷️',
+    ironman: '⚡',
+    captain: '★',
+    thor: '🔨',
+    hulk: '💥',
+    flash: '⚡',
+    panther: '🐾',
+    superman: 'S',
+    deadpool: '⚔️',
+  };
+
+  ctx.fillStyle =
+    driverTheme === 'captain' ? '#1d4ed8' : driverTheme === 'superman' ? '#dc2626' : '#0f172a';
+  ctx.font = '900 34px Inter, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(slot + 1), 128, 130);
+  ctx.fillText(badgeIcon[driverTheme] ?? String(slot + 1), 128, 130);
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+function createDriverSkinTextures(
+  theme: DriverTheme,
+  skinColor: string,
+  outfitColor: string
+): { torsoTex: THREE.CanvasTexture; headTex: THREE.CanvasTexture } {
+  // 1. Torso / Suit Texture (256x256)
+  const tc = document.createElement('canvas');
+  tc.width = 256;
+  tc.height = 256;
+  const tctx = tc.getContext('2d')!;
+  tctx.fillStyle = outfitColor;
+  tctx.fillRect(0, 0, 256, 256);
+
+  if (theme === 'batman') {
+    // Dark tactical Kevlar armor + yellow utility belt + Bat emblem
+    tctx.fillStyle = '#1e293b';
+    tctx.fillRect(36, 30, 184, 140);
+    tctx.strokeStyle = '#334155';
+    tctx.lineWidth = 3;
+    tctx.strokeRect(46, 40, 164, 120);
+    // Yellow utility belt
+    tctx.fillStyle = '#facc15';
+    tctx.fillRect(0, 182, 256, 30);
+    tctx.fillStyle = '#a16207';
+    for (let bx = 24; bx < 236; bx += 42) {
+      tctx.fillRect(bx, 185, 24, 24);
+    }
+    // Bat chest emblem
+    tctx.fillStyle = '#facc15';
+    tctx.beginPath();
+    tctx.ellipse(128, 92, 46, 26, 0, 0, Math.PI * 2);
+    tctx.fill();
+    tctx.fillStyle = '#0f172a';
+    tctx.beginPath();
+    tctx.moveTo(128, 76);
+    tctx.lineTo(142, 84);
+    tctx.lineTo(164, 78);
+    tctx.lineTo(148, 102);
+    tctx.lineTo(128, 112);
+    tctx.lineTo(108, 102);
+    tctx.lineTo(92, 78);
+    tctx.lineTo(114, 84);
+    tctx.closePath();
+    tctx.fill();
+  } else if (theme === 'spiderman') {
+    // Red & Blue Spiderman Suit with black spiderweb lines
+    tctx.fillStyle = '#1d4ed8';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#dc2626';
+    tctx.fillRect(62, 0, 132, 190);
+    tctx.strokeStyle = '#0f172a';
+    tctx.lineWidth = 3;
+    for (let y = 24; y < 190; y += 28) {
+      tctx.beginPath();
+      tctx.moveTo(62, y);
+      tctx.lineTo(194, y);
+      tctx.stroke();
+    }
+    for (let x = 84; x <= 172; x += 22) {
+      tctx.beginPath();
+      tctx.moveTo(x, 0);
+      tctx.lineTo(x, 190);
+      tctx.stroke();
+    }
+    // Black spider chest emblem
+    tctx.fillStyle = '#0f172a';
+    tctx.beginPath();
+    tctx.ellipse(128, 92, 12, 18, 0, 0, Math.PI * 2);
+    tctx.fill();
+    for (const side of [-1, 1]) {
+      for (const dy of [-14, -4, 6, 16]) {
+        tctx.beginPath();
+        tctx.moveTo(128 + side * 10, 92 + dy * 0.5);
+        tctx.lineTo(128 + side * 30, 92 + dy * 1.4);
+        tctx.stroke();
+      }
+    }
+  } else if (theme === 'ironman') {
+    // Red & Gold Mark armor + glowing cyan Arc Reactor
+    tctx.fillStyle = '#b91c1c';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#facc15';
+    tctx.fillRect(58, 36, 140, 24);
+    tctx.fillRect(74, 156, 108, 36);
+    // Glowing Arc Reactor
+    tctx.beginPath();
+    tctx.arc(128, 96, 26, 0, Math.PI * 2);
+    tctx.fillStyle = '#0f172a';
+    tctx.fill();
+    tctx.beginPath();
+    tctx.arc(128, 96, 19, 0, Math.PI * 2);
+    tctx.fillStyle = '#38bdf8';
+    tctx.fill();
+    tctx.beginPath();
+    tctx.arc(128, 96, 9, 0, Math.PI * 2);
+    tctx.fillStyle = '#e0f2fe';
+    tctx.fill();
+  } else if (theme === 'captain') {
+    // Blue tactical suit + white star + red/white torso stripes
+    tctx.fillStyle = '#1e3a8a';
+    tctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 5; i++) {
+      tctx.fillStyle = i % 2 === 0 ? '#ef4444' : '#f8fafc';
+      tctx.fillRect(72 + i * 22, 145, 22, 70);
+    }
+    tctx.fillStyle = '#ffffff';
+    tctx.font = '900 58px sans-serif';
+    tctx.textAlign = 'center';
+    tctx.textBaseline = 'middle';
+    tctx.fillText('★', 128, 92);
+  } else if (theme === 'thor') {
+    // Dark Asgardian armor + 6 silver chest discs
+    tctx.fillStyle = '#1e293b';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#94a3b8';
+    for (const dx of [94, 162]) {
+      for (const dy of [66, 112, 158]) {
+        tctx.beginPath();
+        tctx.arc(dx, dy, 16, 0, Math.PI * 2);
+        tctx.fill();
+      }
+    }
+  } else if (theme === 'hulk') {
+    // Muscular green chest + purple torn shorts
+    tctx.fillStyle = '#16a34a';
+    tctx.fillRect(0, 0, 256, 175);
+    tctx.fillStyle = '#7e22ce';
+    tctx.fillRect(0, 175, 256, 81);
+    tctx.strokeStyle = '#14532d';
+    tctx.lineWidth = 4;
+    tctx.beginPath();
+    tctx.arc(102, 86, 24, 0.2, Math.PI - 0.2);
+    tctx.stroke();
+    tctx.beginPath();
+    tctx.arc(154, 86, 24, 0.2, Math.PI - 0.2);
+    tctx.stroke();
+  } else if (theme === 'flash') {
+    // Crimson speedster suit + golden lightning circle
+    tctx.fillStyle = '#b91c1c';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#facc15';
+    tctx.fillRect(0, 182, 256, 16);
+    tctx.beginPath();
+    tctx.arc(128, 94, 34, 0, Math.PI * 2);
+    tctx.fillStyle = '#ffffff';
+    tctx.fill();
+    tctx.fillStyle = '#facc15';
+    tctx.font = '900 46px sans-serif';
+    tctx.textAlign = 'center';
+    tctx.textBaseline = 'middle';
+    tctx.fillText('⚡', 128, 96);
+  } else if (theme === 'superman') {
+    // Blue suit + yellow/red Superman "S" diamond emblem + red belt
+    tctx.fillStyle = '#2563eb';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#dc2626';
+    tctx.fillRect(0, 184, 256, 24);
+    tctx.fillStyle = '#facc15';
+    tctx.beginPath();
+    tctx.moveTo(96, 70);
+    tctx.lineTo(160, 70);
+    tctx.lineTo(172, 92);
+    tctx.lineTo(128, 134);
+    tctx.lineTo(84, 92);
+    tctx.closePath();
+    tctx.fill();
+    tctx.strokeStyle = '#dc2626';
+    tctx.lineWidth = 6;
+    tctx.stroke();
+    tctx.fillStyle = '#dc2626';
+    tctx.font = '900 44px Inter, system-ui, sans-serif';
+    tctx.textAlign = 'center';
+    tctx.textBaseline = 'middle';
+    tctx.fillText('S', 128, 100);
+  } else if (theme === 'deadpool') {
+    // Red & Black tactical mercenary suit + belt
+    tctx.fillStyle = '#b91c1c';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#0f172a';
+    tctx.fillRect(0, 0, 62, 256);
+    tctx.fillRect(194, 0, 62, 256);
+    tctx.fillRect(0, 182, 256, 28);
+    tctx.fillStyle = '#dc2626';
+    tctx.beginPath();
+    tctx.arc(128, 196, 12, 0, Math.PI * 2);
+    tctx.fill();
+  } else if (theme === 'panther') {
+    // Vibranium black suit + glowing purple kinetic necklace & claw marks
+    tctx.fillStyle = '#090d16';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.strokeStyle = '#a855f7';
+    tctx.lineWidth = 8;
+    tctx.beginPath();
+    tctx.arc(128, 46, 54, 0.25, Math.PI - 0.25);
+    tctx.stroke();
+    tctx.fillStyle = '#e2e8f0';
+    for (let a = 0; a < 7; a++) {
+      const ang = 0.4 + a * 0.36;
+      tctx.fillRect(128 + Math.cos(ang) * 52 - 3, 46 + Math.sin(ang) * 52, 6, 14);
+    }
+  }
+
+  const torsoTex = new THREE.CanvasTexture(tc);
+  torsoTex.colorSpace = THREE.SRGBColorSpace;
+
+  // 2. Head / Mask / Helmet Texture (256x256)
+  const hc = document.createElement('canvas');
+  hc.width = 256;
+  hc.height = 256;
+  const hctx = hc.getContext('2d')!;
+  hctx.fillStyle = skinColor;
+  hctx.fillRect(0, 0, 256, 256);
+
+  if (theme === 'spiderman') {
+    hctx.strokeStyle = '#0f172a';
+    hctx.lineWidth = 3.5;
+    for (let r = 22; r <= 120; r += 24) {
+      hctx.beginPath();
+      hctx.arc(128, 128, r, 0, Math.PI * 2);
+      hctx.stroke();
+    }
+    for (let a = 0; a < 12; a++) {
+      const ang = (a / 12) * Math.PI * 2;
+      hctx.beginPath();
+      hctx.moveTo(128, 128);
+      hctx.lineTo(128 + Math.cos(ang) * 150, 128 + Math.sin(ang) * 150);
+      hctx.stroke();
+    }
+  } else if (theme === 'batman' || theme === 'captain' || theme === 'flash') {
+    // Superhero cowl + exposed lower jaw chin
+    hctx.fillStyle = theme === 'batman' ? '#0f172a' : theme === 'captain' ? '#1d4ed8' : '#dc2626';
+    hctx.fillRect(0, 0, 256, 256);
+    hctx.fillStyle = '#fed7aa';
+    hctx.beginPath();
+    hctx.roundRect(90, 146, 76, 56, 18);
+    hctx.fill();
+    if (theme === 'captain') {
+      hctx.fillStyle = '#ffffff';
+      hctx.font = '900 44px Inter, system-ui, sans-serif';
+      hctx.textAlign = 'center';
+      hctx.textBaseline = 'middle';
+      hctx.fillText('A', 128, 72);
+    }
+  } else if (theme === 'ironman') {
+    // Red helmet + gold faceplate mask
+    hctx.fillStyle = '#b91c1c';
+    hctx.fillRect(0, 0, 256, 256);
+    hctx.fillStyle = '#facc15';
+    hctx.beginPath();
+    hctx.roundRect(76, 68, 104, 124, 22);
+    hctx.fill();
+  } else if (theme === 'superman') {
+    // Blue suit + yellow/red Superman "S" diamond emblem + red belt
+    tctx.fillStyle = '#2563eb';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#dc2626';
+    tctx.fillRect(0, 184, 256, 24);
+    tctx.fillStyle = '#facc15';
+    tctx.beginPath();
+    tctx.moveTo(96, 70);
+    tctx.lineTo(160, 70);
+    tctx.lineTo(172, 92);
+    tctx.lineTo(128, 134);
+    tctx.lineTo(84, 92);
+    tctx.closePath();
+    tctx.fill();
+    tctx.strokeStyle = '#dc2626';
+    tctx.lineWidth = 6;
+    tctx.stroke();
+    tctx.fillStyle = '#dc2626';
+    tctx.font = '900 44px Inter, system-ui, sans-serif';
+    tctx.textAlign = 'center';
+    tctx.textBaseline = 'middle';
+    tctx.fillText('S', 128, 100);
+  } else if (theme === 'deadpool') {
+    // Red & Black tactical mercenary suit + belt
+    tctx.fillStyle = '#b91c1c';
+    tctx.fillRect(0, 0, 256, 256);
+    tctx.fillStyle = '#0f172a';
+    tctx.fillRect(0, 0, 62, 256);
+    tctx.fillRect(194, 0, 62, 256);
+    tctx.fillRect(0, 182, 256, 28);
+    tctx.fillStyle = '#dc2626';
+    tctx.beginPath();
+    tctx.arc(128, 196, 12, 0, Math.PI * 2);
+    tctx.fill();
+  } else if (theme === 'panther') {
+    // Sleek black vibranium mask with silver tribal lines
+    hctx.fillStyle = '#090d16';
+    hctx.fillRect(0, 0, 256, 256);
+    hctx.strokeStyle = '#94a3b8';
+    hctx.lineWidth = 4;
+    hctx.beginPath();
+    hctx.moveTo(86, 86);
+    hctx.lineTo(128, 110);
+    hctx.lineTo(170, 86);
+    hctx.stroke();
+  } else {
+    // Thor / Hulk organic skin texture
+    hctx.fillStyle = 'rgba(255,255,255,0.12)';
+    for (let i = 0; i < 120; i++) {
+      hctx.fillRect((i * 47) % 256, (i * 83) % 256, 4, 4);
+    }
+  }
+
+  const headTex = new THREE.CanvasTexture(hc);
+  headTex.colorSpace = THREE.SRGBColorSpace;
+  return { torsoTex, headTex };
 }
 
 function createTireTreadTexture(): THREE.CanvasTexture {
@@ -219,7 +629,12 @@ export function createKartMesh(
 } {
   const group = new THREE.Group();
   const char = getKartCharacter(characterId, slot);
-  const liveryTex = createKartLiveryTexture(kartColor, char.accent, slot);
+  const liveryTex = createKartLiveryTexture(kartColor, char.accent, slot, char.driverTheme);
+  const { torsoTex, headTex } = createDriverSkinTextures(
+    char.driverTheme,
+    char.skin,
+    char.outfit
+  );
 
   const paintMat = new THREE.MeshPhysicalMaterial({
     map: liveryTex,
@@ -418,21 +833,91 @@ export function createKartMesh(
   steerWheel.rotation.x = -0.5;
   group.add(steerWheel);
 
-  // 2. CTR Character Driver
+  // 2. Oversized 3D Superhero Driver (larger than the kart!)
   const driver = new THREE.Group();
-  driver.position.set(0, 0.85, -0.15);
+  driver.position.set(0, 0.92, -0.22);
+  const heroScale = char.driverTheme === 'hulk' ? 1.98 : 1.78;
+  driver.scale.setScalar(heroScale);
 
   const torso = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.34, 0.38, 6, 12),
-    new THREE.MeshStandardMaterial({ color: char.outfit, roughness: 0.55 })
+    new THREE.CapsuleGeometry(0.34, 0.38, 8, 14),
+    new THREE.MeshStandardMaterial({ map: torsoTex, roughness: 0.48, metalness: 0.12 })
   );
   torso.position.y = 0.38;
+  torso.rotation.y = -Math.PI / 2; // Orient front chest emblem toward +Z forward
   torso.castShadow = true;
   driver.add(torso);
 
+  // Flowing Hero Cape (Batman / Thor / Superman), Twin Katanas (Deadpool), or Shield (Captain America)
+  if (
+    char.driverTheme === 'batman' ||
+    char.driverTheme === 'thor' ||
+    char.driverTheme === 'superman'
+  ) {
+    const cape = new THREE.Mesh(
+      new THREE.BoxGeometry(0.76, 0.72, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: char.driverTheme === 'batman' ? '#090d16' : '#dc2626',
+        roughness: 0.75,
+        side: THREE.DoubleSide,
+      })
+    );
+    cape.position.set(0, 0.42, -0.36);
+    cape.rotation.x = 0.32;
+    cape.castShadow = true;
+    driver.add(cape);
+  } else if (char.driverTheme === 'deadpool') {
+    const bladeMat = new THREE.MeshStandardMaterial({ color: '#cbd5e1', metalness: 0.85, roughness: 0.2 });
+    const hiltMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.5 });
+    for (const side of [-1, 1]) {
+      const katana = new THREE.Group();
+      const sheath = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.92, 0.07), hiltMat);
+      const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.24, 6), bladeMat);
+      hilt.position.y = 0.54;
+      katana.add(sheath, hilt);
+      katana.position.set(side * 0.06, 0.52, -0.35);
+      katana.rotation.z = side * 0.52;
+      driver.add(katana);
+    }
+  } else if (char.driverTheme === 'captain') {
+    const shieldGroup = new THREE.Group();
+    const sRed = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.46, 0.46, 0.08, 18),
+      new THREE.MeshStandardMaterial({ color: '#dc2626', metalness: 0.55, roughness: 0.25 })
+    );
+    sRed.rotation.x = Math.PI / 2;
+    const sWhite = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.32, 0.32, 0.09, 18),
+      new THREE.MeshStandardMaterial({ color: '#f8fafc', metalness: 0.4, roughness: 0.25 })
+    );
+    sWhite.rotation.x = Math.PI / 2;
+    const sBlue = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.18, 0.1, 18),
+      new THREE.MeshStandardMaterial({ color: '#1d4ed8', metalness: 0.5, roughness: 0.25 })
+    );
+    sBlue.rotation.x = Math.PI / 2;
+    shieldGroup.add(sRed, sWhite, sBlue);
+    shieldGroup.scale.setScalar(0.55);
+    shieldGroup.position.set(0, 0.45, -0.35);
+    shieldGroup.rotation.x = 0.22;
+    driver.add(shieldGroup);
+  }
+
   // Driver Arms & Gloves reaching toward the steering wheel
-  const armMat = new THREE.MeshStandardMaterial({ color: char.outfit, roughness: 0.55 });
-  const gloveMat = new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.4 });
+  const armMat = new THREE.MeshStandardMaterial({
+    map: torsoTex,
+    roughness: char.driverTheme === 'ironman' ? 0.22 : 0.5,
+    metalness: char.driverTheme === 'ironman' ? 0.75 : 0.1,
+  });
+  const gloveColor =
+    char.driverTheme === 'spiderman' || char.driverTheme === 'captain' || char.driverTheme === 'flash'
+      ? '#dc2626'
+      : char.driverTheme === 'ironman'
+      ? '#facc15'
+      : char.driverTheme === 'hulk'
+      ? '#16a34a'
+      : '#0f172a';
+  const gloveMat = new THREE.MeshStandardMaterial({ color: gloveColor, roughness: 0.35 });
   for (const ax of [-0.36, 0.36]) {
     const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.42, 4, 8), armMat);
     arm.position.set(ax, 0.48, 0.32);
@@ -449,70 +934,115 @@ export function createKartMesh(
   const headGroup = new THREE.Group();
   headGroup.position.set(0, 1.0, 0);
 
-  // Glossy Tinted Racing Visor
-  const visor = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.47, 0.47, 0.22, 16, 1, true, -Math.PI * 0.38, Math.PI * 0.76),
-    new THREE.MeshPhysicalMaterial({
-      color: '#0f172a',
-      roughness: 0.08,
-      metalness: 0.2,
-      clearcoat: 1.0,
-      transparent: true,
-      opacity: 0.85,
-      side: THREE.DoubleSide,
-    })
-  );
-  visor.position.set(0, 0.04, 0.03);
-  headGroup.add(visor);
-
   const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.46, 14, 14),
-    new THREE.MeshStandardMaterial({ color: char.skin, roughness: 0.45 })
+    new THREE.SphereGeometry(0.46, 18, 16),
+    new THREE.MeshStandardMaterial({ map: headTex, roughness: 0.42, metalness: 0.08 })
   );
+  head.rotation.y = -Math.PI / 2; // Orient front face texture toward +Z
   head.castShadow = true;
   headGroup.add(head);
 
-  // Expressive Eyes / Goggles
-  const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-  const pupilMat = new THREE.MeshBasicMaterial({ color: '#0f172a' });
-  for (const ex of [-0.16, 0.16]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), eyeWhiteMat);
-    eye.position.set(ex, 0.06, 0.4);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), pupilMat);
-    pupil.position.set(ex, 0.06, 0.47);
-    headGroup.add(eye, pupil);
-  }
-
-  // Character-specific Silhouette Ears / Hair / Horns
-  const earMat = new THREE.MeshStandardMaterial({ color: char.accent, roughness: 0.4 });
-  if (char.earType === 'bandicoot' || char.earType === 'bear') {
-    for (const ex of [-0.32, 0.32]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.48, 6), earMat);
-      ear.position.set(ex, 0.46, -0.05);
-      ear.rotation.z = ex > 0 ? -0.35 : 0.35;
+  // Expressive Eyes / Superhero Masks / Helmets
+  if (char.driverTheme === 'batman' || char.driverTheme === 'panther') {
+    const eyeColor = char.driverTheme === 'panther' ? '#c084fc' : '#f8fafc';
+    const cowlEyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+    for (const ex of [-0.15, 0.15]) {
+      const slit = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.055, 0.08), cowlEyeMat);
+      slit.position.set(ex, 0.08, 0.42);
+      slit.rotation.z = ex > 0 ? 0.22 : -0.22;
+      headGroup.add(slit);
+    }
+    const earMat = new THREE.MeshStandardMaterial({
+      color: char.driverTheme === 'panther' ? '#090d16' : '#0f172a',
+      roughness: 0.35,
+    });
+    for (const ex of [-0.26, 0.26]) {
+      const ear = new THREE.Mesh(
+        new THREE.ConeGeometry(0.1, char.driverTheme === 'panther' ? 0.28 : 0.44, 6),
+        earMat
+      );
+      ear.position.set(ex, char.driverTheme === 'panther' ? 0.46 : 0.52, -0.02);
+      ear.rotation.z = ex > 0 ? -0.14 : 0.14;
       headGroup.add(ear);
     }
-  } else if (char.earType === 'ponytail') {
-    const hair = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.65, 7), earMat);
-    hair.position.set(0, 0.32, -0.38);
-    hair.rotation.x = -0.8;
-    headGroup.add(hair);
-  } else if (char.earType === 'cortex') {
-    const flatTop = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.25, 0.65), earMat);
-    flatTop.position.set(0, 0.44, 0);
-    headGroup.add(flatTop);
-  } else if (char.earType === 'alien') {
-    for (const ex of [-0.22, 0.22]) {
-      const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 6), earMat);
-      ant.position.set(ex, 0.52, 0);
-      headGroup.add(ant);
+  } else if (char.driverTheme === 'ironman') {
+    const arcEyeMat = new THREE.MeshBasicMaterial({ color: '#7dd3fc' });
+    for (const ex of [-0.15, 0.15]) {
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.05, 0.08), arcEyeMat);
+      eye.position.set(ex, 0.07, 0.43);
+      headGroup.add(eye);
+    }
+  } else if (char.driverTheme === 'spiderman' || char.driverTheme === 'deadpool') {
+    const rimMat = new THREE.MeshBasicMaterial({ color: '#0f172a' });
+    const lensMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    for (const ex of [-0.16, 0.16]) {
+      const rim = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), rimMat);
+      rim.scale.set(1.1, char.driverTheme === 'deadpool' ? 0.95 : 0.72, 0.45);
+      rim.position.set(ex, 0.07, 0.39);
+      rim.rotation.z = ex > 0 ? 0.36 : -0.36;
+
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), lensMat);
+      lens.scale.set(1.05, char.driverTheme === 'deadpool' ? 0.55 : 0.65, 0.45);
+      lens.position.set(ex, 0.07, 0.415);
+      lens.rotation.z = ex > 0 ? 0.36 : -0.36;
+      headGroup.add(rim, lens);
     }
   } else {
-    for (const ex of [-0.34, 0.34]) {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.5, 6), earMat);
-      horn.position.set(ex, 0.42, 0.1);
-      horn.rotation.x = 0.4;
-      headGroup.add(horn);
+    // Captain America, Thor, Hulk, Flash
+    const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    const pupilMat = new THREE.MeshBasicMaterial({ color: '#0f172a' });
+    for (const ex of [-0.15, 0.15]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeWhiteMat);
+      eye.position.set(ex, 0.06, 0.4);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), pupilMat);
+      pupil.position.set(ex, 0.06, 0.47);
+      headGroup.add(eye, pupil);
+    }
+
+    if (char.driverTheme === 'thor') {
+      // Silver winged Viking helmet + blonde hair
+      const helmMat = new THREE.MeshStandardMaterial({ color: '#cbd5e1', metalness: 0.75, roughness: 0.25 });
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.49, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.46),
+        helmMat
+      );
+      headGroup.add(dome);
+      for (const sx of [-1, 1]) {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 0.22), helmMat);
+        wing.position.set(sx * 0.48, 0.22, -0.02);
+        wing.rotation.z = -sx * 0.35;
+        headGroup.add(wing);
+      }
+    } else if (char.driverTheme === 'flash') {
+      // Golden ear-wings on Flash cowl
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: '#facc15',
+        emissive: '#ca8a04',
+        emissiveIntensity: 0.3,
+        roughness: 0.25,
+      });
+      for (const sx of [-1, 1]) {
+        const bolt = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.38, 6), goldMat);
+        bolt.position.set(sx * 0.47, 0.16, -0.04);
+        bolt.rotation.z = -sx * 0.5;
+        bolt.rotation.x = -0.3;
+        headGroup.add(bolt);
+      }
+    } else if (char.driverTheme === 'captain') {
+      // Small white side wings on Captain America helmet
+      const wingMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.4 });
+      for (const sx of [-1, 1]) {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.16), wingMat);
+        wing.position.set(sx * 0.47, 0.16, -0.02);
+        headGroup.add(wing);
+      }
+    } else if (char.driverTheme === 'hulk' || char.driverTheme === 'superman') {
+      // Hair cap (Hulk / Superman)
+      const hair = new THREE.Mesh(
+        new THREE.SphereGeometry(0.49, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.42),
+        new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.9 })
+      );
+      headGroup.add(hair);
     }
   }
   driver.add(headGroup);
@@ -643,6 +1173,13 @@ export function stepKartPhysics(
 
   if (kart.spinoutTimer > 0) {
     kart.spinoutTimer = Math.max(0, kart.spinoutTimer - dt);
+    kart.drifting = false;
+    kart.turboCharge = 0;
+    kart.turboReserve = 0;
+    kart.flameLeft.visible = false;
+    kart.flameRight.visible = false;
+    kart.sparkMesh.visible = false;
+
     kart.speed *= 1 - 1.4 * dt; // Gentle slowdown while sliding through
     const fwdX = Math.sin(kart.heading);
     const fwdZ = Math.cos(kart.heading);
@@ -651,12 +1188,23 @@ export function stepKartPhysics(
 
     const sample = track.sampleNearestSpline(kart.position.x, kart.position.z);
     if (kart.wrongWaySprite) kart.wrongWaySprite.visible = false;
-    kart.position.y = Math.max(kart.position.y, sample.point.y);
+    if (kart.position.y > sample.point.y) {
+      kart.verticalVel -= 22 * dt;
+      kart.position.y = Math.max(sample.point.y, kart.position.y + kart.verticalVel * dt);
+    } else {
+      kart.position.y = sample.point.y;
+      kart.verticalVel = 0;
+      kart.grounded = true;
+    }
     kart.mesh.position.copy(kart.position);
 
     const dur = kart.spinoutDuration || 0.9;
     const progress = 1 - kart.spinoutTimer / dur;
     kart.mesh.rotation.y = kart.heading + progress * Math.PI * 4; // Exact 2 full spins (720°)
+    kart.mesh.rotation.z = Math.sin(progress * Math.PI * 6) * 0.14;
+    if (kart.spinoutTimer <= 0) {
+      kart.mesh.rotation.z = 0;
+    }
     return;
   }
 
@@ -669,12 +1217,15 @@ export function stepKartPhysics(
   }
 
   const baseTop = track.difficulty === 'hard' ? 40 : track.difficulty === 'medium' ? 39 : 37;
+  const aiLevel: BotLevel = kart.botLevel ?? track.difficulty;
   const botMod = kart.isBot
-    ? track.difficulty === 'hard'
-      ? 1.06
-      : track.difficulty === 'medium'
+    ? aiLevel === 'god'
+      ? 1.18
+      : aiLevel === 'hard'
+      ? 1.09
+      : aiLevel === 'medium'
       ? 0.99
-      : 0.91
+      : 0.86
     : 1.0;
   const maxBaseSpeed = (baseTop + kart.fruits * 0.6) * botMod;
   const boostBonus = kart.turboReserve > 0 ? 18 : 0;
@@ -845,6 +1396,7 @@ export function stepKartPhysics(
   kart.mesh.position.copy(kart.position);
   const visualDriftYaw = kart.drifting ? -kart.driftDir * 0.36 : 0;
   kart.mesh.rotation.y = kart.heading + visualDriftYaw;
+  kart.mesh.rotation.z = 0;
   const targetPitch = kart.grounded
     ? onRampPitch
     : THREE.MathUtils.clamp(-kart.verticalVel * 0.028, -0.45, 0.35);
@@ -966,10 +1518,24 @@ export function computeBotInput(kart: KartState, track: TrackBuilder): Controlle
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
 
-  const baseSteer = -diff * 2.6;
+  const aiLevel: BotLevel = kart.botLevel ?? track.difficulty;
+  const steerGain =
+    aiLevel === 'god' ? 3.8 : aiLevel === 'hard' ? 3.2 : aiLevel === 'medium' ? 2.6 : 2.0;
+  const baseSteer = -diff * steerGain;
   const steer = Math.max(-1, Math.min(1, baseSteer + avoidSteer));
-  const moderateTurn = Math.abs(diff) > 0.35 && Math.abs(diff) < 0.85 && Math.abs(avoidSteer) < 0.25;
-  const straightBoost = Math.abs(diff) < 0.12 && (kart.boostCooldown ?? 0) <= 0 && Math.abs(avoidSteer) < 0.1;
+  const moderateTurn =
+    aiLevel !== 'easy' &&
+    Math.abs(diff) > 0.35 &&
+    Math.abs(diff) < 0.85 &&
+    Math.abs(avoidSteer) < 0.25;
+  const straightBoost =
+    aiLevel !== 'easy' &&
+    Math.abs(diff) < (aiLevel === 'god' ? 0.22 : 0.12) &&
+    (kart.boostCooldown ?? 0) <= 0 &&
+    Math.abs(avoidSteer) < 0.12 &&
+    (aiLevel === 'god' || aiLevel === 'hard' || Math.random() < 0.45);
+  const itemChance =
+    aiLevel === 'god' ? 0.16 : aiLevel === 'hard' ? 0.08 : aiLevel === 'medium' ? 0.035 : 0.01;
 
   return {
     seq: 0,
@@ -978,7 +1544,7 @@ export function computeBotInput(kart: KartState, track: TrackBuilder): Controlle
     brake: false,
     drift: moderateTurn || needHop,
     boost: straightBoost,
-    item: kart.heldItem > 0 && Math.random() < 0.035,
+    item: kart.heldItem > 0 && Math.random() < itemChance,
     timestamp: 0,
   };
 }

@@ -1,6 +1,8 @@
 import { ControllerInputState, TelemetryPacket } from '../net/BinaryProtocol';
 import { TransportMode } from '../net/HostNetworkManager';
 
+export type BotLevel = 'easy' | 'medium' | 'hard' | 'god';
+
 export interface PlatformPlayer {
   id: string;
   slot: number; // 0..9
@@ -8,6 +10,7 @@ export interface PlatformPlayer {
   color: string;
   characterId?: string;
   isBot: boolean;
+  botLevel?: BotLevel;
   connected: boolean;
   transport: TransportMode | 'bot';
   pingMs: number;

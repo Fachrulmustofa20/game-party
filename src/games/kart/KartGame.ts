@@ -17,7 +17,8 @@ interface Projectile {
   velocity: THREE.Vector3;
   targetId?: string;
   ttl: number;
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
+  sparkMesh?: THREE.Mesh;
 }
 
 export class KartGame implements PlatformGame {
@@ -75,6 +76,8 @@ export class KartGame implements PlatformGame {
   private projScreenMatrix = new THREE.Matrix4();
   private prevPosMap = new Map<string, THREE.Vector3>();
   private prevHeadingMap = new Map<string, number>();
+  private prevSpinTimerMap = new Map<string, number>();
+  private interpHeadingMap = new Map<string, number>();
   private tmpDesiredPos = new THREE.Vector3();
   private tmpDesiredTgt = new THREE.Vector3();
   private tmpRenderPos = new THREE.Vector3();
@@ -221,6 +224,7 @@ export class KartGame implements PlatformGame {
         name: p.name,
         color: p.color,
         isBot: p.isBot,
+        botLevel: p.botLevel,
         position: pos,
         heading: laneHeading,
         speed: 0,
@@ -385,6 +389,7 @@ export class KartGame implements PlatformGame {
         }
         prev.copy(k.position);
         this.prevHeadingMap.set(k.id, k.heading);
+        this.prevSpinTimerMap.set(k.id, k.spinoutTimer);
       }
       this.fixedUpdate(FIXED_DT);
       this.accumulator -= FIXED_DT;
@@ -545,18 +550,34 @@ export class KartGame implements PlatformGame {
 
       for (const obs of this.track.obstacles) {
         if (obs.respawnTimer > 0) continue;
-        if (kart.position.distanceToSquared(obs.position) < obs.radius * obs.radius) {
+        const odx = kart.position.x - obs.position.x;
+        const odz = kart.position.z - obs.position.z;
+        const ody = Math.abs(kart.position.y - obs.basePoint.y);
+        const hitRadius = obs.radius + 0.55;
+        // Allow well-timed hop over flat oil slicks, otherwise check 2D road-plane radius + vertical clearance
+        const hoppedOverOil = obs.type === 'oil' && !kart.grounded && ody > 1.05;
+        if (!hoppedOverOil && ody < 3.2 && odx * odx + odz * odz < hitRadius * hitRadius) {
           if (obs.type === 'nitro-crate') {
             obs.respawnTimer = 6.0;
             obs.mesh.visible = false;
+            this.spawnCollisionSparks(obs.position.clone().add(new THREE.Vector3(0, 0.6, 0)));
           }
           if (kart.shieldTimer <= 0 && kart.spinoutTimer <= 0 && kart.obstacleCooldown <= 0) {
             const dur = obs.type === 'nitro-crate' ? 1.1 : 0.9;
             kart.spinoutDuration = dur;
             kart.spinoutTimer = dur;
             kart.obstacleCooldown = dur + 1.2;
-            kart.speed = Math.max(12, kart.speed * 0.55);
-            this.sdk.sendVibrate(kart.id, [160]);
+            kart.drifting = false;
+            kart.turboCharge = 0;
+            kart.turboReserve = 0;
+            kart.speed = Math.max(10, kart.speed * 0.52);
+            if (obs.type !== 'oil') {
+              this.spawnCollisionSparks(kart.position.clone().add(new THREE.Vector3(0, 0.9, 0)));
+            }
+            if (!kart.isBot) {
+              this.audio.playTone(obs.type === 'oil' ? 240 : 125, 0.22, 'sawtooth', 0.16);
+              this.sdk.sendVibrate(kart.id, [160]);
+            }
           }
         }
       }
@@ -669,14 +690,49 @@ export class KartGame implements PlatformGame {
       }
 
       pr.position.addScaledVector(pr.velocity, dt);
+      if (pr.type === 'bomb' || pr.type === 'tnt') {
+        const roadSample = this.track.sampleNearestSpline(pr.position.x, pr.position.z);
+        pr.position.y = roadSample.point.y + 1.02;
+      }
       pr.mesh.position.copy(pr.position);
+
+      if (pr.type === 'missile' && pr.velocity.lengthSq() > 0.1) {
+        pr.mesh.lookAt(
+          pr.position.x + pr.velocity.x,
+          pr.position.y + pr.velocity.y,
+          pr.position.z + pr.velocity.z
+        );
+      } else if (pr.type === 'bomb') {
+        pr.mesh.rotation.y = Math.atan2(pr.velocity.x, pr.velocity.z);
+        pr.mesh.rotation.x += 10 * dt;
+      } else if (pr.type === 'tnt') {
+        const pulse = 1 + Math.sin(this.raceTime * 11 + i) * 0.08;
+        pr.mesh.scale.setScalar(pulse);
+      }
+
+      if (pr.sparkMesh) {
+        const flicker = 0.78 + Math.random() * 0.55;
+        pr.sparkMesh.scale.setScalar(flicker);
+      }
 
       for (const k of this.karts) {
         if (k.id === pr.ownerId || k.eliminated || k.finished) continue;
-        if (k.position.distanceToSquared(pr.position) < 6.2) {
+        const pdx = k.position.x - pr.position.x;
+        const pdz = k.position.z - pr.position.z;
+        const pdy = Math.abs(k.position.y + 0.8 - pr.position.y);
+        if (pdx * pdx + pdz * pdz < 7.5 && pdy < 3.2) {
+          this.spawnCollisionSparks(pr.position.clone());
           if (k.shieldTimer <= 0) {
+            k.spinoutDuration = 1.1;
             k.spinoutTimer = 1.1;
-            this.sdk.sendVibrate(k.id, [180]);
+            k.drifting = false;
+            k.turboCharge = 0;
+            k.turboReserve = 0;
+            k.speed = Math.max(8, k.speed * 0.45);
+            if (!k.isBot) {
+              this.audio.playTone(115, 0.26, 'sawtooth', 0.2);
+              this.sdk.sendVibrate(k.id, [180, 40, 120]);
+            }
           }
           this.scene.remove(pr.mesh);
           this.projectiles.splice(i, 1);
@@ -937,6 +993,126 @@ export class KartGame implements PlatformGame {
     }
   }
 
+  private createBombModel(isDroppedMine: boolean): { group: THREE.Group; spark: THREE.Mesh } {
+    const group = new THREE.Group();
+
+    // Glossy cast-iron round bomb sphere
+    const shell = new THREE.Mesh(
+      new THREE.SphereGeometry(0.95, 20, 18),
+      new THREE.MeshStandardMaterial({
+        color: '#111827',
+        roughness: 0.24,
+        metalness: 0.68,
+      })
+    );
+    shell.castShadow = true;
+    group.add(shell);
+
+    // High-contrast equatorial band so players easily spot bombs on dark asphalt
+    const bandColor = isDroppedMine ? '#ef4444' : '#f59e0b';
+    const band = new THREE.Mesh(
+      new THREE.TorusGeometry(0.93, 0.085, 8, 24),
+      new THREE.MeshStandardMaterial({
+        color: bandColor,
+        emissive: bandColor,
+        emissiveIntensity: 0.45,
+        roughness: 0.3,
+      })
+    );
+    band.rotation.x = Math.PI / 2;
+    group.add(band);
+
+    // Metallic fuse nozzle / collar on top
+    const collarMat = new THREE.MeshStandardMaterial({
+      color: '#64748b',
+      roughness: 0.28,
+      metalness: 0.85,
+    });
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.28, 14), collarMat);
+    collar.position.y = 0.92;
+    collar.castShadow = true;
+    group.add(collar);
+
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.055, 8, 14), collarMat);
+    lip.rotation.x = Math.PI / 2;
+    lip.position.y = 1.05;
+    group.add(lip);
+
+    // Curved rope fuse wick
+    const fuseCurve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(0, 1.05, 0),
+      new THREE.Vector3(0.16, 1.44, -0.08),
+      new THREE.Vector3(0.36, 1.56, -0.2)
+    );
+    const wick = new THREE.Mesh(
+      new THREE.TubeGeometry(fuseCurve, 10, 0.06, 8, false),
+      new THREE.MeshStandardMaterial({ color: '#d6d3d1', roughness: 0.85 })
+    );
+    group.add(wick);
+
+    // Sizzling spark at tip of fuse
+    const spark = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 10, 10),
+      new THREE.MeshBasicMaterial({ color: '#fde047' })
+    );
+    spark.position.set(0.36, 1.56, -0.2);
+    const flare = new THREE.Mesh(
+      new THREE.SphereGeometry(0.38, 10, 10),
+      new THREE.MeshBasicMaterial({ color: '#f97316', transparent: true, opacity: 0.55 })
+    );
+    spark.add(flare);
+    group.add(spark);
+
+    if (isDroppedMine) {
+      group.scale.setScalar(1.12);
+    }
+
+    return { group, spark };
+  }
+
+  private createMissileModel(): { group: THREE.Group; spark: THREE.Mesh } {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.38, 1.65, 14),
+      new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.25, metalness: 0.45 })
+    );
+    body.rotation.x = Math.PI / 2;
+    body.castShadow = true;
+    group.add(body);
+
+    const nose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.35, 0.72, 14),
+      new THREE.MeshStandardMaterial({
+        color: '#ef4444',
+        emissive: '#b91c1c',
+        emissiveIntensity: 0.35,
+        roughness: 0.25,
+      })
+    );
+    nose.rotation.x = Math.PI / 2;
+    nose.position.z = 1.18;
+    group.add(nose);
+
+    const finMat = new THREE.MeshStandardMaterial({ color: '#ef4444', roughness: 0.35 });
+    for (let i = 0; i < 4; i++) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.52, 0.48), finMat);
+      const a = (i * Math.PI) / 2;
+      fin.position.set(Math.cos(a) * 0.36, Math.sin(a) * 0.36, -0.62);
+      fin.rotation.z = a;
+      group.add(fin);
+    }
+
+    const spark = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.85, 10),
+      new THREE.MeshBasicMaterial({ color: '#38bdf8' })
+    );
+    spark.rotation.x = -Math.PI / 2;
+    spark.position.z = -1.2;
+    group.add(spark);
+
+    return { group, spark };
+  }
+
   private spawnItemEffect(kart: KartState): void {
     if (!this.scene) return;
     const item = kart.heldItem;
@@ -952,19 +1128,18 @@ export class KartGame implements PlatformGame {
     }
 
     const fwd = new THREE.Vector3(Math.sin(kart.heading), 0, Math.cos(kart.heading));
-    const color = item === 1 ? '#ef4444' : item === 2 ? '#0f172a' : '#dc2626';
-    const mesh = new THREE.Mesh(
-      item === 3 ? new THREE.BoxGeometry(1.8, 1.8, 1.8) : new THREE.SphereGeometry(0.9, 10, 10),
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45 })
-    );
-    const pos = kart.position.clone().add(new THREE.Vector3(0, 1.1, 0));
+    const built =
+      item === 1 ? this.createMissileModel() : this.createBombModel(item === 3);
+    const mesh = built.group;
+
+    const pos = kart.position.clone().add(new THREE.Vector3(0, 1.02, 0));
     if (item === 3) {
       pos.addScaledVector(fwd, -3.5);
     } else {
       pos.addScaledVector(fwd, 3.2);
     }
     mesh.position.copy(pos);
-    mesh.castShadow = true;
+    mesh.rotation.y = kart.heading;
     this.scene.add(mesh);
 
     const ahead = this.karts.find((k) => k.rank === Math.max(1, kart.rank - 1) && k.id !== kart.id);
@@ -976,6 +1151,7 @@ export class KartGame implements PlatformGame {
       targetId: item === 1 ? ahead?.id : undefined,
       ttl: item === 3 ? 18 : 4.5,
       mesh,
+      sparkMesh: built.spark,
     });
   }
 
@@ -1064,11 +1240,29 @@ export class KartGame implements PlatformGame {
           this.tmpRenderPos.lerpVectors(prevPos, k.position, alpha);
           k.mesh.position.copy(this.tmpRenderPos);
         }
+        let interpHead = k.heading;
         if (prevHead !== undefined) {
           let diff = k.heading - prevHead;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          k.mesh.rotation.y = prevHead + diff * alpha;
+          interpHead = prevHead + diff * alpha;
+        }
+        this.interpHeadingMap.set(k.id, interpHead);
+
+        const prevSpin = this.prevSpinTimerMap.get(k.id) ?? 0;
+        if (k.spinoutTimer > 0 || (prevSpin > 0 && alpha < 1)) {
+          const interpSpin =
+            prevSpin > k.spinoutTimer
+              ? THREE.MathUtils.lerp(prevSpin, k.spinoutTimer, alpha)
+              : k.spinoutTimer;
+          const dur = k.spinoutDuration || 0.9;
+          const progress = THREE.MathUtils.clamp(1 - interpSpin / dur, 0, 1);
+          k.mesh.rotation.y = interpHead + progress * Math.PI * 4; // Smooth 720° spinout!
+          k.mesh.rotation.z = Math.sin(progress * Math.PI * 6) * 0.14;
+        } else {
+          const visualDriftYaw = k.drifting ? -k.driftDir * 0.36 : 0;
+          k.mesh.rotation.y = interpHead + visualDriftYaw;
+          k.mesh.rotation.z = 0;
         }
       }
     }
@@ -1104,7 +1298,7 @@ export class KartGame implements PlatformGame {
         const vy = h - (row + 1) * cellH;
 
         const kp = k.mesh.position;
-        const kh = k.mesh.rotation.y;
+        const kh = this.interpHeadingMap.get(k.id) ?? k.heading;
         const camDist = count >= 5 ? 11.8 : 9.8;
         const camHeight = count >= 5 ? 5.8 : 4.8;
         const backX = Math.sin(kh) * camDist;
@@ -1128,7 +1322,7 @@ export class KartGame implements PlatformGame {
         this.karts.find((k) => !k.eliminated) ??
         this.karts[0];
       const lp = leader.mesh.position;
-      const lh = leader.mesh.rotation.y;
+      const lh = this.interpHeadingMap.get(leader.id) ?? leader.heading;
       const extraPlayers = Math.max(0, this.karts.length - 5);
       const stadiumBack = 42 + extraPlayers * 2.5;
       const stadiumHeight = 30 + extraPlayers * 1.8;

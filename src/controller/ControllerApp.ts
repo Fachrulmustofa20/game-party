@@ -2,18 +2,12 @@ import { KartAudioEngine } from '../audio/KartAudioEngine';
 import { TelemetryPacket } from '../net/BinaryProtocol';
 import { ControllerNetworkClient } from '../net/ControllerNetworkClient';
 import { TransportMode } from '../net/HostNetworkManager';
-import { KART_CHARACTERS, renderCarPreviewSvg } from '../sdk/KartCharacters';
-
-const COLORS = [
-  '#ff4d4d',
-  '#38bdf8',
-  '#4ade80',
-  '#facc15',
-  '#c084fc',
-  '#fb923c',
-  '#f472b6',
-  '#2dd4bf',
-];
+import {
+  KART_CHARACTERS,
+  getKartCharacter,
+  renderCarPreviewSvg,
+  renderHeroPreviewSvg,
+} from '../sdk/KartCharacters';
 
 const ITEM_LABELS: Record<number, { icon: string; name: string }> = {
   0: { icon: '', name: 'KOSONG' },
@@ -37,8 +31,16 @@ export class ControllerApp {
   private root: HTMLElement;
   private initialRoom: string;
   private client: ControllerNetworkClient;
-  private selectedColor = COLORS[Math.floor(Math.random() * COLORS.length)];
   private selectedCharacter = KART_CHARACTERS[Math.floor(Math.random() * KART_CHARACTERS.length)].id;
+  private selectedColor =
+    getKartCharacter(this.selectedCharacter, 0).outfit === '#0f172a'
+      ? '#334155'
+      : getKartCharacter(this.selectedCharacter, 0).outfit;
+  private takenCharacters = new Set<string>();
+  private takenPollTimer: number | null = null;
+  private rerenderCarsFn: (() => void) | null = null;
+  private verifiedRoomCode: string | null = null;
+  private playerNameDraft = 'Player';
   private mySlot = 0;
   private transportMode: TransportMode = 'connecting';
   private wakeLock: WakeLockSentinel | null = null;
@@ -47,6 +49,13 @@ export class ControllerApp {
 
   // Input state sampled at 60Hz
   private touchSteer = 0;
+  private analogBrake = false;
+  private dpadMode = false;
+  private dpadState = {
+    down: false,
+    left: false,
+    right: false,
+  };
   private buttons = {
     gas: false,
     brake: false,
@@ -66,6 +75,10 @@ export class ControllerApp {
   private boostBtnEl: HTMLButtonElement | null = null;
   private boostLabelEl: HTMLElement | null = null;
   private radarCanvas: HTMLCanvasElement | null = null;
+  private analogSwitchBtnEl: HTMLButtonElement | null = null;
+  private analogBaseEl: HTMLElement | null = null;
+  private dpadPadEl: HTMLElement | null = null;
+  private analogHintEl: HTMLElement | null = null;
 
   constructor(root: HTMLElement, initialRoom: string) {
     this.root = root;
@@ -73,6 +86,10 @@ export class ControllerApp {
     this.client = new ControllerNetworkClient({
       onJoined: (info) => {
         this.mySlot = info.slot;
+        if (this.takenPollTimer !== null) {
+          clearInterval(this.takenPollTimer);
+          this.takenPollTimer = null;
+        }
         this.renderGamepad();
         this.startInputLoop();
         this.requestWakeLock();
@@ -88,7 +105,10 @@ export class ControllerApp {
         }
       },
       onTelemetry: (t) => this.updateTelemetryHud(t),
-      onError: (msg) => {
+      onError: (msg, taken) => {
+        if (taken) {
+          this.applyTakenCharacters(taken);
+        }
         alert(msg);
       },
     });
@@ -96,7 +116,11 @@ export class ControllerApp {
 
   mount(): void {
     this.setupOrientationListener();
-    this.renderJoinScreen();
+    if (this.initialRoom.trim().length >= 4) {
+      void this.verifyAndEnterRoom(this.initialRoom.trim().toUpperCase(), true);
+    } else {
+      this.renderJoinScreen();
+    }
     void this.tryLockOrientationOnly();
   }
 
@@ -106,12 +130,16 @@ export class ControllerApp {
       if (portraitQuery.matches) {
         // Release held inputs if phone rotates to portrait
         this.touchSteer = 0;
+        this.analogBrake = false;
+        this.dpadState = { down: false, left: false, right: false };
         this.buttons.gas = false;
         this.buttons.brake = false;
         this.buttons.drift = false;
         this.buttons.item = false;
         this.buttons.boost = false;
-        this.root.querySelectorAll('.pad-btn.pressed').forEach((el) => el.classList.remove('pressed'));
+        this.root.querySelectorAll('.pad-btn.pressed, .dpad-btn.pressed').forEach((el) =>
+          el.classList.remove('pressed')
+        );
       }
     };
     portraitQuery.addEventListener('change', handleOrientationChange);
@@ -162,22 +190,80 @@ export class ControllerApp {
   }
 
   private renderJoinScreen(): void {
+    if (this.takenPollTimer !== null) {
+      clearInterval(this.takenPollTimer);
+      this.takenPollTimer = null;
+    }
+
+    if (!this.verifiedRoomCode) {
+      this.root.innerHTML = `
+        <div class="ctrl-root">
+          ${this.renderLandscapeGuardMarkup()}
+          <div class="ctrl-join">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h2 style="margin:0;font-size:22px;font-weight:900;">NitroController</h2>
+              <span class="brand-badge">Langkah 1 / 2</span>
+            </div>
+            <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.45;">
+              Masukkan <strong>Kode Room</strong> dari layar PC terlebih dahulu agar karakter yang dipilih sesuai dan tidak bentrok dengan room lain.
+            </p>
+            <label style="font-size:12px;color:var(--muted);">Kode Room</label>
+            <input id="inp-room" class="ctrl-input" maxlength="6" placeholder="ABCD" value="${this.initialRoom.toUpperCase()}" style="text-transform:uppercase;letter-spacing:0.15em;" />
+            <div id="room-check-msg" style="font-size:12px;color:#fca5a5;font-weight:700;display:none;"></div>
+            <button id="btn-check-room" class="btn btn-primary" style="padding:14px;font-size:16px;">Lanjut Pilih Karakter</button>
+          </div>
+        </div>
+      `;
+
+      this.bindLandscapeGuard();
+      const roomInput = this.root.querySelector('#inp-room') as HTMLInputElement;
+      const msgEl = this.root.querySelector('#room-check-msg') as HTMLElement;
+      const checkBtn = this.root.querySelector('#btn-check-room') as HTMLButtonElement;
+
+      const submitRoom = async () => {
+        const code = roomInput.value.trim().toUpperCase();
+        if (code.length < 4) {
+          msgEl.textContent = 'Masukkan minimal 4 karakter Kode Room.';
+          msgEl.style.display = 'block';
+          return;
+        }
+        checkBtn.disabled = true;
+        checkBtn.textContent = 'Memeriksa Room...';
+        msgEl.style.display = 'none';
+        const ok = await this.verifyAndEnterRoom(code, false);
+        if (!ok) {
+          checkBtn.disabled = false;
+          checkBtn.textContent = 'Lanjut Pilih Karakter';
+          msgEl.textContent = `Room "${code}" tidak ditemukan atau belum aktif.`;
+          msgEl.style.display = 'block';
+        }
+      };
+
+      checkBtn?.addEventListener('click', () => void submitRoom());
+      roomInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') void submitRoom();
+      });
+      return;
+    }
+
+    const activeRoom = this.verifiedRoomCode;
     this.root.innerHTML = `
       <div class="ctrl-root">
         ${this.renderLandscapeGuardMarkup()}
         <div class="ctrl-join">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <h2 style="margin:0;font-size:22px;font-weight:900;">NitroController</h2>
-            <span class="brand-badge">P2P WebRTC</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <h2 style="margin:0;font-size:20px;font-weight:900;">Room ${activeRoom}</h2>
+              <span class="brand-badge">Langkah 2 / 2</span>
+            </div>
+            <button id="btn-change-room" type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:11px;">Ganti Room</button>
           </div>
-          <label style="font-size:12px;color:var(--muted);">Kode Room</label>
-          <input id="inp-room" class="ctrl-input" maxlength="6" placeholder="ABCD" value="${this.initialRoom.toUpperCase()}" style="text-transform:uppercase;letter-spacing:0.15em;" />
           <label style="font-size:12px;color:var(--muted);">Nama Pemain</label>
-          <input id="inp-name" class="ctrl-input" maxlength="32" placeholder="Pembalap" value="Player" />
-          <label style="font-size:12px;color:var(--muted);">Pilih Mobil</label>
+          <input id="inp-name" class="ctrl-input" maxlength="32" placeholder="Pembalap" value="${this.playerNameDraft}" />
+          <label style="font-size:12px;color:var(--muted);">Karakter &amp; Mobil Terpilih</label>
+          <div class="selected-char-preview" id="selected-char-preview"></div>
+          <label style="font-size:12px;color:var(--muted);">Pilih Karakter Superhero</label>
           <div class="character-picker-grid" id="character-row"></div>
-          <label style="font-size:12px;color:var(--muted);">Pilih Warna Kart</label>
-          <div class="color-picker-row" id="color-row"></div>
           <button id="btn-join" class="btn btn-primary" style="padding:14px;font-size:16px;">Gabung ke Layar PC</button>
         </div>
       </div>
@@ -185,52 +271,157 @@ export class ControllerApp {
 
     this.bindLandscapeGuard();
 
+    const nameInput = this.root.querySelector('#inp-name') as HTMLInputElement;
+    nameInput?.addEventListener('input', () => {
+      this.playerNameDraft = nameInput.value;
+    });
+
+    this.root.querySelector('#btn-change-room')?.addEventListener('click', () => {
+      this.verifiedRoomCode = null;
+      this.takenCharacters.clear();
+      this.renderJoinScreen();
+    });
+
     const charRow = this.root.querySelector('#character-row')!;
+    const previewBox = this.root.querySelector('#selected-char-preview') as HTMLElement | null;
+
+    const renderSelectedPreview = () => {
+      if (!previewBox) return;
+      if (this.takenCharacters.has(this.selectedCharacter)) {
+        previewBox.style.borderColor = '#ef4444';
+        previewBox.innerHTML = `
+          <div style="width:100%;text-align:center;font-size:12px;font-weight:800;color:#fca5a5;">
+            Semua karakter sedang dipakai oleh Pemain / AI di room ${activeRoom}!
+          </div>
+        `;
+        return;
+      }
+      const ch = getKartCharacter(this.selectedCharacter, 0);
+      previewBox.style.borderColor = this.selectedColor;
+      previewBox.innerHTML = `
+        <div class="selected-char-visuals">
+          ${renderHeroPreviewSvg(ch.driverTheme)}
+          ${renderCarPreviewSvg(ch.carStyle, this.selectedColor, ch.accent)}
+        </div>
+        <div class="selected-char-info">
+          <div class="selected-char-name">${ch.name}</div>
+          <div class="selected-char-car">${ch.carLabel}</div>
+        </div>
+      `;
+    };
+
+    const joinBtn = this.root.querySelector('#btn-join') as HTMLButtonElement | null;
+
     const renderCars = () => {
       charRow.innerHTML = '';
       KART_CHARACTERS.forEach((ch) => {
+        const isTaken = this.takenCharacters.has(ch.id);
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = `character-card ${ch.id === this.selectedCharacter ? 'selected' : ''}`;
+        card.disabled = isTaken;
+        card.setAttribute('aria-disabled', String(isTaken));
+        card.className = `character-card ${ch.id === this.selectedCharacter && !isTaken ? 'selected' : ''} ${
+          isTaken ? 'taken' : ''
+        }`;
         card.innerHTML = `
-          ${renderCarPreviewSvg(ch.carStyle, this.selectedColor, ch.accent)}
+          ${renderHeroPreviewSvg(ch.driverTheme)}
           <span class="character-name">${ch.name}</span>
-          <span class="character-car">${ch.carLabel}</span>
+          <span class="character-car">${isTaken ? 'SUDAH DIPAKAI' : ch.carLabel}</span>
+          ${isTaken ? '<span class="character-taken-badge">DIPAKAI</span>' : ''}
         `;
         card.addEventListener('click', () => {
+          if (this.takenCharacters.has(ch.id)) return;
           this.selectedCharacter = ch.id;
+          this.selectedColor = ch.outfit === '#0f172a' ? '#334155' : ch.outfit;
           charRow.querySelectorAll('.character-card').forEach((el) => el.classList.remove('selected'));
           card.classList.add('selected');
+          renderSelectedPreview();
         });
         charRow.appendChild(card);
       });
+      if (joinBtn) {
+        const allTaken = KART_CHARACTERS.every((c) => this.takenCharacters.has(c.id));
+        joinBtn.disabled = allTaken;
+        joinBtn.textContent = allTaken ? 'Semua Karakter Terpakai' : 'Gabung ke Layar PC';
+      }
+      renderSelectedPreview();
     };
+    this.rerenderCarsFn = renderCars;
     renderCars();
 
-    const colorRow = this.root.querySelector('#color-row')!;
-    COLORS.forEach((c) => {
-      const sw = document.createElement('div');
-      sw.className = `color-swatch ${c === this.selectedColor ? 'selected' : ''}`;
-      sw.style.background = c;
-      sw.addEventListener('click', () => {
-        this.selectedColor = c;
-        colorRow.querySelectorAll('.color-swatch').forEach((el) => el.classList.remove('selected'));
-        sw.classList.add('selected');
-        renderCars();
-      });
-      colorRow.appendChild(sw);
-    });
+    this.takenPollTimer = window.setInterval(() => {
+      if (this.verifiedRoomCode) {
+        void this.fetchTakenCharacters(this.verifiedRoomCode);
+      }
+    }, 1000);
 
-    const roomInput = this.root.querySelector('#inp-room') as HTMLInputElement;
-    const nameInput = this.root.querySelector('#inp-name') as HTMLInputElement;
-
-    this.root.querySelector('#btn-join')?.addEventListener('click', () => {
-      const code = roomInput.value.trim().toUpperCase();
-      if (!code) return alert('Masukkan kode room!');
+    joinBtn?.addEventListener('click', () => {
+      if (!this.verifiedRoomCode) return;
+      if (this.takenCharacters.has(this.selectedCharacter)) {
+        return alert('Karakter tersebut sudah dipakai pemain lain! Pilih karakter yang tersedia.');
+      }
       const name = nameInput.value.trim() || 'Player';
       void this.enforceLandscape();
-      this.client.join(code, name, this.selectedColor, this.selectedCharacter);
+      this.client.join(this.verifiedRoomCode, name, this.selectedColor, this.selectedCharacter);
     });
+  }
+
+  private async verifyAndEnterRoom(roomCode: string, fallbackToStep1: boolean): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/room-characters?room=${encodeURIComponent(roomCode)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        if (fallbackToStep1) this.renderJoinScreen();
+        return false;
+      }
+      const data = (await res.json()) as { exists?: boolean; takenCharacters?: string[] };
+      if (!data.exists) {
+        if (fallbackToStep1) this.renderJoinScreen();
+        return false;
+      }
+      this.verifiedRoomCode = roomCode;
+      this.initialRoom = roomCode;
+      this.applyTakenCharacters(Array.isArray(data.takenCharacters) ? data.takenCharacters : []);
+      this.renderJoinScreen();
+      return true;
+    } catch {
+      if (fallbackToStep1) this.renderJoinScreen();
+      return false;
+    }
+  }
+
+  private async fetchTakenCharacters(roomCode: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/room-characters?room=${encodeURIComponent(roomCode)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { exists?: boolean; takenCharacters?: string[] };
+      if (data.exists === false) {
+        this.verifiedRoomCode = null;
+        this.takenCharacters.clear();
+        this.renderJoinScreen();
+        return;
+      }
+      if (Array.isArray(data.takenCharacters)) {
+        this.applyTakenCharacters(data.takenCharacters);
+      }
+    } catch {
+      // Ignore network hiccup during polling
+    }
+  }
+
+  private applyTakenCharacters(takenList: string[]): void {
+    this.takenCharacters = new Set(takenList);
+    if (this.takenCharacters.has(this.selectedCharacter)) {
+      const free = KART_CHARACTERS.find((c) => !this.takenCharacters.has(c.id));
+      if (free) {
+        this.selectedCharacter = free.id;
+        this.selectedColor = free.outfit === '#0f172a' ? '#334155' : free.outfit;
+      }
+    }
+    this.rerenderCarsFn?.();
   }
 
   private renderGamepad(): void {
@@ -238,12 +429,30 @@ export class ControllerApp {
       <div class="ctrl-root">
         ${this.renderLandscapeGuardMarkup()}
         <div class="ctrl-gamepad">
-          <!-- Left: Analog Stick -->
+          <!-- Left: Analog Stick OR 3-Button Pad (Kiri, Mundur, Kanan) -->
           <div class="steer-zone">
-            <div class="analog-base" id="analog-base">
+            <div class="analog-base" id="analog-base" style="${this.dpadMode ? 'display:none;' : ''}">
               <div class="analog-knob" id="analog-knob"></div>
             </div>
-            <div style="font-size:11px;color:var(--muted);">Geser Kiri / Kanan untuk Stir</div>
+
+            <div class="dpad-grid" id="dpad-pad" style="${this.dpadMode ? '' : 'display:none;'}">
+              <button type="button" id="dpad-left" class="dpad-btn dpad-left" aria-label="Kiri">
+                <span aria-hidden="true">◀</span>
+                <span class="dpad-sub">KIRI</span>
+              </button>
+              <button type="button" id="dpad-down" class="dpad-btn dpad-down" aria-label="Mundur">
+                <span aria-hidden="true">▼</span>
+                <span class="dpad-sub">MUNDUR</span>
+              </button>
+              <button type="button" id="dpad-right" class="dpad-btn dpad-right" aria-label="Kanan">
+                <span aria-hidden="true">▶</span>
+                <span class="dpad-sub">KANAN</span>
+              </button>
+            </div>
+
+            <div id="analog-hint" style="font-size:11px;color:var(--muted);text-align:center;${this.dpadMode ? 'display:none;' : ''}">
+              Geser Kiri / Kanan untuk Stir &bull; Bawah untuk Mundur
+            </div>
           </div>
 
           <!-- Center: Live HUD & Minimap -->
@@ -272,7 +481,20 @@ export class ControllerApp {
               </div>
             </div>
 
-            <canvas id="radar-canvas" width="120" height="84" style="background:#070b14;border-radius:10px;border:1px solid rgba(255,255,255,0.12);"></canvas>
+            <button
+              id="btn-analog-mode"
+              type="button"
+              role="switch"
+              aria-checked="${this.dpadMode}"
+              class="analog-mode-switch ${this.dpadMode ? 'active' : ''}"
+            >
+              <span class="analog-switch-dot" aria-hidden="true"></span>
+              <span id="analog-mode-label">
+                ${this.dpadMode ? 'Mode: Tombol 3 Arah' : 'Mode: Analog Stir'}
+              </span>
+            </button>
+
+            <canvas id="radar-canvas" width="120" height="72" style="background:#070b14;border-radius:10px;border:1px solid rgba(255,255,255,0.12);"></canvas>
 
             <div style="width:100%;">
               <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
@@ -317,12 +539,75 @@ export class ControllerApp {
     this.boostBtnEl = this.root.querySelector('#btn-boost');
     this.boostLabelEl = this.root.querySelector('#boost-label');
     this.radarCanvas = this.root.querySelector('#radar-canvas');
+    this.analogSwitchBtnEl = this.root.querySelector('#btn-analog-mode');
+    this.analogBaseEl = this.root.querySelector('#analog-base');
+    this.dpadPadEl = this.root.querySelector('#dpad-pad');
+    this.analogHintEl = this.root.querySelector('#analog-hint');
 
     this.bindLandscapeGuard();
     this.updateStatusBadge();
     this.bindAnalogStick();
+    this.bindDpadButtons();
+    this.bindAnalogModeSwitch();
     this.bindActionButtons();
     this.bindFullscreen();
+  }
+
+  private bindDpadButtons(): void {
+    const bindDir = (id: string, key: keyof typeof this.dpadState) => {
+      const el = this.root.querySelector(id) as HTMLElement | null;
+      if (!el) return;
+      const set = (val: boolean) => {
+        this.dpadState[key] = val;
+        el.classList.toggle('pressed', val);
+        if (val) {
+          this.audio.unlock();
+          navigator.vibrate?.(10);
+        }
+      };
+      el.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        set(true);
+      });
+      el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        set(false);
+      });
+      el.addEventListener('touchcancel', () => set(false));
+      el.addEventListener('mousedown', () => set(true));
+      el.addEventListener('mouseup', () => set(false));
+      el.addEventListener('mouseleave', () => set(false));
+    };
+
+    bindDir('#dpad-down', 'down');
+    bindDir('#dpad-left', 'left');
+    bindDir('#dpad-right', 'right');
+  }
+
+  private bindAnalogModeSwitch(): void {
+    const btn = this.analogSwitchBtnEl;
+    if (!btn) return;
+    const labelEl = this.root.querySelector('#analog-mode-label');
+
+    btn.addEventListener('click', () => {
+      this.dpadMode = !this.dpadMode;
+      this.touchSteer = 0;
+      this.analogBrake = false;
+      this.dpadState = { down: false, left: false, right: false };
+      this.root.querySelectorAll('.dpad-btn.pressed').forEach((el) => el.classList.remove('pressed'));
+
+      btn.setAttribute('aria-checked', String(this.dpadMode));
+      btn.classList.toggle('active', this.dpadMode);
+
+      if (this.analogBaseEl) this.analogBaseEl.style.display = this.dpadMode ? 'none' : '';
+      if (this.dpadPadEl) this.dpadPadEl.style.display = this.dpadMode ? '' : 'none';
+      if (this.analogHintEl) this.analogHintEl.style.display = this.dpadMode ? 'none' : '';
+
+      if (labelEl) {
+        labelEl.textContent = this.dpadMode ? 'Mode: Tombol 3 Arah' : 'Mode: Analog Stir';
+      }
+      navigator.vibrate?.(16);
+    });
   }
 
   private updateStatusBadge(): void {
@@ -379,11 +664,13 @@ export class ControllerApp {
 
       knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       this.touchSteer = Math.max(-1, Math.min(1, dx / maxRadius));
+      this.analogBrake = dy / maxRadius > 0.35;
     };
 
     const reset = () => {
       activeTouchId = null;
       this.touchSteer = 0;
+      this.analogBrake = false;
       base.style.position = 'relative';
       base.style.left = '';
       base.style.top = '';
@@ -392,7 +679,7 @@ export class ControllerApp {
     };
 
     zone.addEventListener('touchstart', (e) => {
-      if ((e.target as HTMLElement)?.closest('button')) return;
+      if (this.dpadMode || (e.target as HTMLElement)?.closest('button')) return;
       e.preventDefault();
       const t = e.changedTouches[0];
       activeTouchId = t.identifier;
@@ -401,7 +688,7 @@ export class ControllerApp {
     });
 
     zone.addEventListener('touchmove', (e) => {
-      if (activeTouchId === null) return;
+      if (this.dpadMode || activeTouchId === null) return;
       e.preventDefault();
       for (const t of Array.from(e.changedTouches)) {
         if (t.identifier === activeTouchId) {
@@ -420,7 +707,7 @@ export class ControllerApp {
     // Mouse support for desktop tab simulation
     let mouseDown = false;
     zone.addEventListener('mousedown', (e) => {
-      if ((e.target as HTMLElement)?.closest('button')) return;
+      if (this.dpadMode || (e.target as HTMLElement)?.closest('button')) return;
       mouseDown = true;
       placeBaseAt(e.clientX, e.clientY);
       updateFromClient(e.clientX, e.clientY);
@@ -491,10 +778,16 @@ export class ControllerApp {
   private startInputLoop(): void {
     if (this.sendLoopId !== null) cancelAnimationFrame(this.sendLoopId);
     const loop = () => {
+      const effectiveSteer = this.dpadMode
+        ? (this.dpadState.left ? -1 : 0) + (this.dpadState.right ? 1 : 0)
+        : this.touchSteer;
+      const effectiveGas = this.buttons.gas;
+      const effectiveBrake =
+        this.buttons.brake || (this.dpadMode ? this.dpadState.down : this.analogBrake);
       this.client.sendInput({
-        steer: this.touchSteer,
-        gas: this.buttons.gas,
-        brake: this.buttons.brake,
+        steer: effectiveSteer,
+        gas: effectiveGas,
+        brake: effectiveBrake,
         drift: this.buttons.drift,
         item: this.buttons.item,
         boost: this.buttons.boost,
@@ -502,7 +795,7 @@ export class ControllerApp {
       this.audio.updatePlayerEngine(
         'self',
         this.mySlot,
-        this.buttons.gas,
+        effectiveGas,
         this.lastSpeedKmh / 120,
         this.buttons.boost
       );
