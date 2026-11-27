@@ -12,6 +12,7 @@ import { PacGame } from '../games/pacman/PacGame';
 import { NeonSerpentGame } from '../games/snake/NeonSerpentGame';
 import { LiarsDiceGame } from '../games/liars-dice/LiarsDiceGame';
 import { PokerGame } from '../games/poker/PokerGame';
+import { LudoGame } from '../games/ludo/LudoGame';
 
 const ROOM_STORAGE_KEY = 'nitro_host_room_code';
 const DONATION_URL = 'https://saweria.co/fachrulmustofa';
@@ -48,6 +49,7 @@ export class PlatformApp {
     new NeonSerpentGame(),
     new LiarsDiceGame(),
     new PokerGame(),
+    new LudoGame(),
   ];
   private selectedGame: PlatformGame = this.games[0];
 
