@@ -1123,34 +1123,49 @@ body,
 }
 
 .dpad-4way-grid {
+  position: relative;
   width: 100%;
   height: 100%;
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1.05fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 8px;
+  min-height: 0;
   touch-action: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+
+.dpad-4way-grid .dpad-btn {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  font-size: 26px;
+  gap: 2px;
 }
 
 .arr-up {
-  grid-column: 2;
-  grid-row: 1;
+  clip-path: polygon(2% 0%, 98% 0%, 50% 48%);
+  justify-content: flex-start;
+  padding-top: 10%;
 }
 
 .arr-left {
-  grid-column: 1;
-  grid-row: 1 / span 2;
+  clip-path: polygon(0% 2%, 48% 50%, 0% 98%);
+  align-items: flex-start;
+  padding-left: 10%;
 }
 
 .arr-right {
-  grid-column: 3;
-  grid-row: 1 / span 2;
+  clip-path: polygon(100% 2%, 100% 98%, 52% 50%);
+  align-items: flex-end;
+  padding-right: 10%;
 }
 
 .arr-down {
-  grid-column: 2;
-  grid-row: 2;
+  clip-path: polygon(50% 52%, 98% 100%, 2% 100%);
+  justify-content: flex-end;
+  padding-bottom: 10%;
 }
 
 .arr-down.pressed {
