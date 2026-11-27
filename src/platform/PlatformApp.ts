@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { Plus, RefreshCw, createElement } from 'lucide';
 import { ControllerInputState } from '../net/BinaryProtocol';
 import { ConnectedPlayer, HostNetworkManager } from '../net/HostNetworkManager';
-import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer, TrackMapId } from '../sdk/GameSDK';
+import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer } from '../sdk/GameSDK';
 import { KART_CHARACTERS, getKartCharacter } from '../sdk/KartCharacters';
 import { SPACE_CHARACTERS, getSpaceCharacter } from '../sdk/SpaceCharacters';
 import { SNAKE_CHARACTERS, getSnakeCharacter } from '../sdk/SnakeColors';
@@ -346,52 +346,6 @@ export class PlatformApp {
     for (const game of this.games) {
       const card = document.createElement('div');
       card.className = 'game-card';
-      const lapSelectorHtml =
-        game.id === 'nitro-kart-3d'
-          ? `
-        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" class="lap-selector">
-          <span style="font-size:12px;color:var(--muted);font-weight:700;">Jumlah Lap:</span>
-          ${[1, 3, 5]
-            .map(
-              (laps) => `
-            <button type="button" data-laps="${laps}" class="btn ${
-                (game.maxLaps ?? 3) === laps ? 'btn-primary' : 'btn-secondary'
-              }" style="padding:4px 10px;font-size:12px;">${laps} Lap</button>
-          `
-            )
-            .join('')}
-        </div>
-        <div style="margin-top:6px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-size:12px;color:var(--muted);font-weight:700;">Pilih Map:</span>
-            <div style="display:flex;gap:4px;">
-              <button type="button" class="btn btn-secondary map-slide-left" style="padding:2px 8px;font-size:12px;">&lsaquo;</button>
-              <button type="button" class="btn btn-secondary map-slide-right" style="padding:2px 8px;font-size:12px;">&rsaquo;</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;scrollbar-width:thin;" class="map-selector">
-            ${[
-              { id: 'crash-cove', label: 'Pantai Tropis', diff: 'Mudah', diffColor: '#22c55e', img: '/images/map-crash-cove.png' },
-              { id: 'neon-canyon', label: 'Neon Canyon', diff: 'Sedang', diffColor: '#facc15', img: '/images/map-neon-canyon.png' },
-              { id: 'ice-peak', label: 'Polar Peak', diff: 'Sulit', diffColor: '#ef4444', img: '/images/map-ice-peak.png' },
-            ]
-              .map((m) => {
-                const active = (game.selectedMap ?? 'crash-cove') === m.id;
-                return `
-              <button type="button" data-map="${m.id}" style="flex:0 0 146px;scroll-snap-align:start;padding:0;border-radius:10px;overflow:hidden;border:2px solid ${
-                  active ? 'var(--accent)' : 'rgba(255,255,255,0.12)'
-                };background:#0b1222;color:var(--text);cursor:pointer;text-align:left;transition:transform 0.12s ease,border-color 0.12s ease;">
-                <img src="${m.img}" alt="${m.label}" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;" />
-                <div style="padding:6px 8px;display:flex;flex-direction:column;gap:2px;">
-                  <span style="font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.label}</span>
-                  <span style="font-size:10px;font-weight:800;color:${m.diffColor};">${m.diff}</span>
-                </div>
-              </button>`;
-              })
-              .join('')}
-          </div>
-        </div>`
-          : '';
 
       card.innerHTML = `
         <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#070b14;border:1px solid rgba(255,255,255,0.08);">
@@ -403,47 +357,20 @@ export class PlatformApp {
         </div>
         <h3>${game.title}</h3>
         <p>${game.subtitle}</p>
-        ${lapSelectorHtml}
         <button class="btn btn-primary btn-play" style="margin-top:auto;">Buat Room</button>
       `;
-
-      card.querySelectorAll<HTMLButtonElement>('[data-laps]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const laps = Number(btn.dataset.laps || 3);
-          game.maxLaps = laps;
-          card.querySelectorAll<HTMLButtonElement>('[data-laps]').forEach((b) => {
-            b.className = `btn ${Number(b.dataset.laps) === laps ? 'btn-primary' : 'btn-secondary'}`;
-          });
-        });
-      });
-
-      const mapSlider = card.querySelector('.map-selector') as HTMLElement | null;
-      card.querySelector('.map-slide-left')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mapSlider?.scrollBy({ left: -160, behavior: 'smooth' });
-      });
-      card.querySelector('.map-slide-right')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mapSlider?.scrollBy({ left: 160, behavior: 'smooth' });
-      });
-
-      card.querySelectorAll<HTMLButtonElement>('[data-map]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const mapId = (btn.dataset.map || 'crash-cove') as TrackMapId;
-          game.selectedMap = mapId;
-          card.querySelectorAll<HTMLButtonElement>('[data-map]').forEach((b) => {
-            b.style.borderColor =
-              b.dataset.map === mapId ? 'var(--accent)' : 'rgba(255,255,255,0.12)';
-          });
-        });
-      });
 
       card.querySelector('.btn-play')?.addEventListener('click', (e) => {
         e.stopPropagation();
         this.openRoomModal(game, true);
       });
+
+      if (game.mountCardOverlay) {
+        const sheet = document.createElement('div');
+        sheet.className = 'game-card-hover-sheet';
+        card.appendChild(sheet);
+        game.mountCardOverlay(sheet, () => this.openRoomModal(game, true));
+      }
       gamesGrid.appendChild(card);
     }
   }
@@ -1016,6 +943,7 @@ export class PlatformApp {
 
   private showHelpModal(): void {
     this.root.querySelector('#hub-help-modal')?.remove();
+
     const modal = document.createElement('div');
     modal.id = 'hub-help-modal';
     modal.style.cssText =
