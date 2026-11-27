@@ -594,11 +594,11 @@ export class SpaceDogfightGame implements PlatformGame {
     const fireProb = lvl === 'god' || lvl === 'hard' ? 1.0 : lvl === 'medium' ? 0.65 : 0.3;
     return {
       steer,
-      gas: dist > 18,
+      gas: lvl !== 'easy' && aligned && dist > 45 && bot.boostCooldown <= 0,
       brake: false,
       drift: bot.dodgeCooldown <= 0 && dist < 24 && Math.random() < dodgeChance,
       item: aligned && dist < 78 && Math.random() < fireProb,
-      boost: lvl !== 'easy' && aligned && dist > 45 && bot.boostCooldown <= 0,
+      boost: Math.abs(diff) > 0.85 && dist < 35,
     };
   }
 
@@ -708,12 +708,15 @@ export class SpaceDogfightGame implements PlatformGame {
         if (ship.powerUpTimer <= 0) ship.powerUp = null;
       }
 
-      // Steer
-      const turnRate = ship.dodgeTimer > 0 ? 1.8 : 3.4;
+      // Button B (input.boost) = Air Brake / Sharp Turn
+      const airBraking = input.boost && ship.boostTimer <= 0;
+
+      // Steer (faster turn rate during Air Brake)
+      const turnRate = ship.dodgeTimer > 0 ? 1.8 : airBraking ? 5.8 : 3.4;
       ship.angle += input.steer * turnRate * dt;
 
-      // Boost
-      if (input.boost && ship.boostCooldown <= 0) {
+      // Button D (input.gas) = Turbo Burst (Cooldown)
+      if (input.gas && ship.boostCooldown <= 0) {
         ship.boostTimer = 1.1;
         ship.boostCooldown = 4.5;
         this.sdk?.sendVibrate(ship.player.id, [30, 20, 40]);
@@ -730,19 +733,25 @@ export class SpaceDogfightGame implements PlatformGame {
         this.sdk?.sendVibrate(ship.player.id, 25);
       }
 
-      // Thrust & Reverse Brake
-      const accel = ship.boostTimer > 0 ? 96 : input.gas ? 56 : input.brake ? 24 : 12;
-      this.audio.updateShipThruster(ship.player.id, ship.player.slot, input.gas, ship.boostTimer > 0);
-      if (input.gas || ship.boostTimer > 0) {
-        ship.vx += Math.cos(ship.angle) * accel * dt;
-        ship.vz += Math.sin(ship.angle) * accel * dt;
-      } else if (input.brake) {
+      // Cruise forward automatically; Button D = Turbo Burst, Button B = Air Brake / Sharp Turn
+      const isCruising = !airBraking && !input.brake;
+      const accel = ship.boostTimer > 0 ? 108 : input.brake ? 24 : airBraking ? 14 : 48;
+      this.audio.updateShipThruster(
+        ship.player.id,
+        ship.player.slot,
+        isCruising || ship.boostTimer > 0,
+        ship.boostTimer > 0
+      );
+      if (input.brake && ship.boostTimer <= 0) {
         ship.vx -= Math.cos(ship.angle) * accel * dt;
         ship.vz -= Math.sin(ship.angle) * accel * dt;
+      } else {
+        ship.vx += Math.cos(ship.angle) * accel * dt;
+        ship.vz += Math.sin(ship.angle) * accel * dt;
       }
 
-      // Space drag
-      const drag = Math.pow(0.28, dt);
+      // Space drag (stronger drag during Air Brake for tight dogfight turns)
+      const drag = Math.pow(airBraking ? 0.05 : 0.28, dt);
       ship.vx *= drag;
       ship.vz *= drag;
 
@@ -805,7 +814,8 @@ export class SpaceDogfightGame implements PlatformGame {
       ship.mesh.rotation.set(ship.rollAngle, -ship.angle, 0);
       ship.shieldMesh.visible = ship.dodgeTimer > 0 || ship.powerUp === 'shield';
 
-      const flameScale = ship.boostTimer > 0 ? 1.8 : input.gas ? 1.0 : 0.25;
+      const flameScale =
+        ship.boostTimer > 0 ? 1.9 : airBraking || input.brake ? 0.2 : 0.85;
       ship.flameLeft.scale.set(1, flameScale, 1);
       ship.flameRight.scale.set(1, flameScale, 1);
     }
