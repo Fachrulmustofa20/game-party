@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { Plus, RefreshCw, createElement } from 'lucide';
 import { ControllerInputState } from '../net/BinaryProtocol';
 import { ConnectedPlayer, HostNetworkManager } from '../net/HostNetworkManager';
-import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer, TrackMapId } from '../sdk/GameSDK';
+import { BotLevel, HostSDKContext, PlatformGame, PlatformPlayer } from '../sdk/GameSDK';
 import { KART_CHARACTERS, getKartCharacter } from '../sdk/KartCharacters';
 import { SPACE_CHARACTERS, getSpaceCharacter } from '../sdk/SpaceCharacters';
 import { SNAKE_CHARACTERS, getSnakeCharacter } from '../sdk/SnakeColors';
@@ -403,47 +403,20 @@ export class PlatformApp {
         </div>
         <h3>${game.title}</h3>
         <p>${game.subtitle}</p>
-        ${lapSelectorHtml}
         <button class="btn btn-primary btn-play" style="margin-top:auto;">Buat Room</button>
       `;
-
-      card.querySelectorAll<HTMLButtonElement>('[data-laps]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const laps = Number(btn.dataset.laps || 3);
-          game.maxLaps = laps;
-          card.querySelectorAll<HTMLButtonElement>('[data-laps]').forEach((b) => {
-            b.className = `btn ${Number(b.dataset.laps) === laps ? 'btn-primary' : 'btn-secondary'}`;
-          });
-        });
-      });
-
-      const mapSlider = card.querySelector('.map-selector') as HTMLElement | null;
-      card.querySelector('.map-slide-left')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mapSlider?.scrollBy({ left: -160, behavior: 'smooth' });
-      });
-      card.querySelector('.map-slide-right')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        mapSlider?.scrollBy({ left: 160, behavior: 'smooth' });
-      });
-
-      card.querySelectorAll<HTMLButtonElement>('[data-map]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const mapId = (btn.dataset.map || 'crash-cove') as TrackMapId;
-          game.selectedMap = mapId;
-          card.querySelectorAll<HTMLButtonElement>('[data-map]').forEach((b) => {
-            b.style.borderColor =
-              b.dataset.map === mapId ? 'var(--accent)' : 'rgba(255,255,255,0.12)';
-          });
-        });
-      });
 
       card.querySelector('.btn-play')?.addEventListener('click', (e) => {
         e.stopPropagation();
         this.openRoomModal(game, true);
       });
+
+      if (game.mountCardOverlay) {
+        const sheet = document.createElement('div');
+        sheet.className = 'game-card-hover-sheet';
+        card.appendChild(sheet);
+        game.mountCardOverlay(sheet, () => this.openRoomModal(game, true));
+      }
       gamesGrid.appendChild(card);
     }
   }
@@ -1014,6 +987,7 @@ export class PlatformApp {
 
   private showHelpModal(): void {
     this.root.querySelector('#hub-help-modal')?.remove();
+
     const modal = document.createElement('div');
     modal.id = 'hub-help-modal';
     modal.style.cssText =

@@ -30,6 +30,7 @@ This platform separates **immutable core infrastructure** (WebRTC P2P + WebSocke
 3. **Custom Controller (Optional):** `src/games/<game-slug>/<Name>Controller.ts` + `src/controller/ControllerRegistry.ts`
 4. **Custom Character View (Optional):** `src/games/<game-slug>/<Name>CharacterView.ts` + `src/sdk/CharacterRegistry.ts`
 5. **Custom Audio Engine (Optional):** `src/games/<game-slug>/<Name>AudioEngine.ts` + `src/audio/AudioRegistry.ts`
+6. **Card Hover Options Sheet (Optional):** `src/games/<game-slug>/<Name>CardOverlay.ts` + `PlatformGame.mountCardOverlay?`
 
 ---
 
@@ -172,6 +173,12 @@ Skip this step if your game does not need custom Web Audio synthesis (it will us
    };
    ```
 3. In `<Name>Game.ts`, instantiate `private audio = new MyNewAudioEngine()`, call `this.audio.unlock()` on `mount()` (plus `pointerdown`/`keydown` once listeners), and call `this.audio.destroy()` in `unmount()`.
+
+### Step 6 (Optional): Add a Card Hover Options Sheet (`mountCardOverlay`)
+If your game has pre-room options (such as map, lap count, or mode selection) that should appear when hovering its card in the Hub instead of cluttering the card at rest:
+1. Create `src/games/<game-slug>/<Name>CardOverlay.ts` exporting `mount<Name>CardOverlay(container, game, onCreateRoom)` (see `src/games/kart/KartCardOverlay.ts` as the reference implementation).
+2. Implement `mountCardOverlay(container: HTMLElement, onCreateRoom: () => void): void` on your `PlatformGame` class (`src/sdk/GameSDK.ts`).
+3. `PlatformApp.ts` automatically wraps the rendered content inside `.game-card-hover-sheet` (`src/style.css`), which slides up from the bottom to fit the content height on `.game-card:hover` and slides back down when hover ends. Call `onCreateRoom()` from your overlay's **Buat Room** button.
 
 ---
 

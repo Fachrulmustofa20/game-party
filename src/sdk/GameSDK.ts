@@ -39,6 +39,7 @@ export interface PlatformGame {
   controllerLayout: 'racing-ctr' | 'arena-dpad';
   maxLaps?: number;
   selectedMap?: TrackMapId;
+  mountCardOverlay?(container: HTMLElement, onCreateRoom: () => void): void;
   mount(container: HTMLElement, sdk: HostSDKContext): void;
   unmount(): void;
 }
