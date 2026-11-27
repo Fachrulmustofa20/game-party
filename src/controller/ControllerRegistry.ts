@@ -3,6 +3,7 @@ import { PacController } from '../games/pacman/PacController';
 import { SerpentController } from '../games/snake/SerpentController';
 import { LiarsDiceController } from '../games/liars-dice/LiarsDiceController';
 import { PokerController } from '../games/poker/PokerController';
+import { LudoController } from '../games/ludo/LudoController';
 import { DefaultController } from './DefaultController';
 import { GameControllerView } from './GameControllerView';
 
@@ -17,6 +18,7 @@ const CONTROLLER_FACTORIES: Record<string, () => GameControllerView> = {
   'neon-serpent': () => new SerpentController(),
   'liars-dice': () => new LiarsDiceController(),
   'texas-poker': () => new PokerController(),
+  'ludo-3d': () => new LudoController(),
 };
 
 export function createControllerForGame(gameId: string | null): GameControllerView {

@@ -9,6 +9,7 @@ import {
   stepKartPhysics,
 } from './KartPhysics';
 import { TrackBuilder } from './TrackBuilder';
+import { mountKartCardOverlay } from './KartCardOverlay';
 
 interface Projectile {
   type: 'missile' | 'bomb' | 'tnt';
@@ -57,6 +58,10 @@ export class KartGame implements PlatformGame {
   private forceSplitScreen = false;
   maxLaps = 3;
   selectedMap: TrackMapId = 'crash-cove';
+
+  mountCardOverlay(container: HTMLElement, onCreateRoom: () => void): void {
+    mountKartCardOverlay(container, this, onCreateRoom);
+  }
 
   private racePhase: 'countdown' | 'racing' | 'celebrating' | 'finished' = 'countdown';
   private countdownTimer = 3.5;

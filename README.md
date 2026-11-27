@@ -317,6 +317,23 @@ const CHARACTER_VIEW_FACTORIES: Record<string, () => GameCharacterView> = {
 
 ---
 
+## How to Add a Game Card Hover Options Sheet (Optional)
+
+If your game has pre-room settings (such as map, lap count, or difficulty) that should slide up from the bottom of the Hub card on hover without cluttering the card at rest:
+
+1. Create a dedicated overlay module under `src/games/<your-game>/` (see `src/games/kart/KartCardOverlay.ts` for Nitro Kart 3D's lap & map selector).
+2. Implement the optional `mountCardOverlay(container: HTMLElement, onCreateRoom: () => void): void` method from `PlatformGame` (`src/sdk/GameSDK.ts`) on your game class:
+
+```ts
+mountCardOverlay(container: HTMLElement, onCreateRoom: () => void): void {
+  mountBomberCardOverlay(container, this, onCreateRoom);
+}
+```
+
+3. `PlatformApp` automatically mounts your overlay inside `.game-card-hover-sheet` (`src/style.css`), which slides up smoothly from the bottom to match its content height on hover and hides again when the pointer leaves the card. Trigger `onCreateRoom()` from the overlay's **Buat Room** button.
+
+---
+
 ## Binary Protocol Reference
 
 ### Controller Input (`ControllerInputState` — 8 bytes @ 60Hz)
