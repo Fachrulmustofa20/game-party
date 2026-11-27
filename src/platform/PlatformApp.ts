@@ -52,6 +52,7 @@ export class PlatformApp {
     new PokerGame(),
     new LudoGame(),
     new BomberGame(),
+    new LudoGame(),
   ];
   private selectedGame: PlatformGame = this.games[0];
 
