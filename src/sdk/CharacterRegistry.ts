@@ -4,6 +4,7 @@ import { SpaceCharacterView } from '../games/dogfight/SpaceCharacterView';
 import { KartCharacterView } from '../games/kart/KartCharacterView';
 import { PacCharacterView } from '../games/pacman/PacCharacterView';
 import { SerpentCharacterView } from '../games/snake/SerpentCharacterView';
+import { LudoCharacterView } from '../games/ludo/LudoCharacterView';
 
 export type { CharacterOption, GameCharacterView };
 
@@ -17,6 +18,7 @@ const CHARACTER_VIEW_FACTORIES: Record<string, () => GameCharacterView> = {
   'space-dogfight-2p': () => new SpaceCharacterView(),
   'neon-serpent': () => new SerpentCharacterView(),
   'pacman-ghost-hunt': () => new PacCharacterView(),
+  'ludo-3d': () => new LudoCharacterView(),
 };
 
 export function createCharacterViewForGame(gameId: string | null | undefined): GameCharacterView {

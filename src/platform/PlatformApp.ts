@@ -13,6 +13,7 @@ import { NeonSerpentGame } from '../games/snake/NeonSerpentGame';
 import { LiarsDiceGame } from '../games/liars-dice/LiarsDiceGame';
 import { PokerGame } from '../games/poker/PokerGame';
 import { BomberGame } from '../games/bomber/BomberGame';
+import { LudoGame } from '../games/ludo/LudoGame';
 
 const ROOM_STORAGE_KEY = 'nitro_host_room_code';
 const DONATION_URL = 'https://saweria.co/fachrulmustofa';
@@ -50,6 +51,7 @@ export class PlatformApp {
     new LiarsDiceGame(),
     new PokerGame(),
     new BomberGame(),
+    new LudoGame(),
   ];
   private selectedGame: PlatformGame = this.games[0];
 
@@ -163,7 +165,7 @@ export class PlatformApp {
         width: 180,
         margin: 1,
         color: { dark: '#0f172a', light: '#ffffff' },
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }
 
@@ -354,9 +356,8 @@ export class PlatformApp {
           ${[1, 3, 5]
             .map(
               (laps) => `
-            <button type="button" data-laps="${laps}" class="btn ${
-                (game.maxLaps ?? 3) === laps ? 'btn-primary' : 'btn-secondary'
-              }" style="padding:4px 10px;font-size:12px;">${laps} Lap</button>
+            <button type="button" data-laps="${laps}" class="btn ${(game.maxLaps ?? 3) === laps ? 'btn-primary' : 'btn-secondary'
+                }" style="padding:4px 10px;font-size:12px;">${laps} Lap</button>
           `
             )
             .join('')}
@@ -371,15 +372,14 @@ export class PlatformApp {
           </div>
           <div style="display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;scrollbar-width:thin;" class="map-selector">
             ${[
-              { id: 'crash-cove', label: 'Pantai Tropis', diff: 'Mudah', diffColor: '#22c55e', img: '/images/map-crash-cove.png' },
-              { id: 'neon-canyon', label: 'Neon Canyon', diff: 'Sedang', diffColor: '#facc15', img: '/images/map-neon-canyon.png' },
-              { id: 'ice-peak', label: 'Polar Peak', diff: 'Sulit', diffColor: '#ef4444', img: '/images/map-ice-peak.png' },
-            ]
-              .map((m) => {
-                const active = (game.selectedMap ?? 'crash-cove') === m.id;
-                return `
-              <button type="button" data-map="${m.id}" style="flex:0 0 146px;scroll-snap-align:start;padding:0;border-radius:10px;overflow:hidden;border:2px solid ${
-                  active ? 'var(--accent)' : 'rgba(255,255,255,0.12)'
+            { id: 'crash-cove', label: 'Pantai Tropis', diff: 'Mudah', diffColor: '#22c55e', img: '/images/map-crash-cove.png' },
+            { id: 'neon-canyon', label: 'Neon Canyon', diff: 'Sedang', diffColor: '#facc15', img: '/images/map-neon-canyon.png' },
+            { id: 'ice-peak', label: 'Polar Peak', diff: 'Sulit', diffColor: '#ef4444', img: '/images/map-ice-peak.png' },
+          ]
+            .map((m) => {
+              const active = (game.selectedMap ?? 'crash-cove') === m.id;
+              return `
+              <button type="button" data-map="${m.id}" style="flex:0 0 146px;scroll-snap-align:start;padding:0;border-radius:10px;overflow:hidden;border:2px solid ${active ? 'var(--accent)' : 'rgba(255,255,255,0.12)'
                 };background:#0b1222;color:var(--text);cursor:pointer;text-align:left;transition:transform 0.12s ease,border-color 0.12s ease;">
                 <img src="${m.img}" alt="${m.label}" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;" />
                 <div style="padding:6px 8px;display:flex;flex-direction:column;gap:2px;">
@@ -387,8 +387,8 @@ export class PlatformApp {
                   <span style="font-size:10px;font-weight:800;color:${m.diffColor};">${m.diff}</span>
                 </div>
               </button>`;
-              })
-              .join('')}
+            })
+            .join('')}
           </div>
         </div>`
           : '';
@@ -510,15 +510,14 @@ export class PlatformApp {
                 </div>
                 <div class="max-players-presets">
                   ${[2, 4, 6, 8, 10]
-                    .filter((n) => n <= game.maxPlayers)
-                    .map(
-                      (n) => `
-                    <button type="button" data-max-preset="${n}" class="max-players-chip ${
-                        this.getSlotLimit() === n ? 'active' : ''
-                      }">${n}P</button>
+        .filter((n) => n <= game.maxPlayers)
+        .map(
+          (n) => `
+                    <button type="button" data-max-preset="${n}" class="max-players-chip ${this.getSlotLimit() === n ? 'active' : ''
+            }">${n}P</button>
                   `
-                    )
-                    .join('')}
+        )
+        .join('')}
                 </div>
               </div>
               <button class="btn btn-secondary" id="btn-open-ctrl">
@@ -540,21 +539,20 @@ export class PlatformApp {
                 <div id="ai-level-bar" class="ai-level-bar" style="display:none;">
                   <span style="font-size:12px;color:var(--muted);font-weight:700;">Level Bot:</span>
                   ${(
-                    [
-                      ['easy', 'Mudah'],
-                      ['medium', 'Sedang'],
-                      ['hard', 'Sulit'],
-                      ['god', 'Dewa'],
-                    ] as const
-                  )
-                    .map(
-                      ([lvl, label]) => `
-                    <button type="button" data-ai-level="${lvl}" class="btn ai-level-btn ${
-                        this.botLevel === lvl ? 'btn-primary' : 'btn-secondary'
-                      }">${label}</button>
+        [
+          ['easy', 'Mudah'],
+          ['medium', 'Sedang'],
+          ['hard', 'Sulit'],
+          ['god', 'Dewa'],
+        ] as const
+      )
+        .map(
+          ([lvl, label]) => `
+                    <button type="button" data-ai-level="${lvl}" class="btn ai-level-btn ${this.botLevel === lvl ? 'btn-primary' : 'btn-secondary'
+            }">${label}</button>
                   `
-                    )
-                    .join('')}
+        )
+        .join('')}
                 </div>
               </div>
             </div>
@@ -794,10 +792,10 @@ export class PlatformApp {
       this.botLevel === 'god'
         ? 'Dewa'
         : this.botLevel === 'hard'
-        ? 'Sulit'
-        : this.botLevel === 'easy'
-        ? 'Mudah'
-        : 'Sedang';
+          ? 'Sulit'
+          : this.botLevel === 'easy'
+            ? 'Mudah'
+            : 'Sedang';
 
     this.playersGridEl.innerHTML = '';
 
@@ -815,12 +813,12 @@ export class PlatformApp {
           p.id === 'local_p1'
             ? 'Keyboard PC'
             : p.transport === 'webrtc'
-            ? 'WebRTC P2P'
-            : p.transport === 'bot'
-            ? `AI Bot • ${aiLevelLabel}`
-            : p.transport === 'ws-fallback'
-            ? 'WS Relay'
-            : 'Connecting...';
+              ? 'WebRTC P2P'
+              : p.transport === 'bot'
+                ? `AI Bot • ${aiLevelLabel}`
+                : p.transport === 'ws-fallback'
+                  ? 'WS Relay'
+                  : 'Connecting...';
         const pingLabel = p.isBot ? '0 ms' : `${p.pingMs} ms`;
         const charName = p.characterId
           ? this.getCharacterDisplayName(p.characterId, slot)
