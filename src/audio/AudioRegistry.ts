@@ -4,6 +4,7 @@ import { PokerAudioEngine } from '../games/poker/PokerAudioEngine';
 import { LudoAudioEngine } from '../games/ludo/LudoAudioEngine';
 import { BomberAudioEngine } from '../games/bomber/BomberAudioEngine';
 import { LudoAudioEngine } from '../games/ludo/LudoAudioEngine';
+import { BomberAudioEngine } from '../games/bomber/BomberAudioEngine';
 import { DefaultAudioEngine, GameAudioEngine } from './GameAudioEngine';
 import { KartAudioEngine } from './KartAudioEngine';
 
@@ -20,6 +21,7 @@ const AUDIO_FACTORIES: Record<string, () => GameAudioEngine> = {
   'ludo-3d': () => new LudoAudioEngine(),
   'bomber-party': () => new BomberAudioEngine(),
   'ludo-3d': () => new LudoAudioEngine(),
+  'bomber-party': () => new BomberAudioEngine(),
 };
 
 export function createAudioForGame(gameId: string | null): GameAudioEngine {
