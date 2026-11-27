@@ -5,6 +5,7 @@ import { LiarsDiceController } from '../games/liars-dice/LiarsDiceController';
 import { PokerController } from '../games/poker/PokerController';
 import { LudoController } from '../games/ludo/LudoController';
 import { BomberController } from '../games/bomber/BomberController';
+import { MiniGolfController } from '../games/minigolf/MiniGolfController';
 import { DefaultController } from './DefaultController';
 import { GameControllerView } from './GameControllerView';
 
@@ -21,6 +22,7 @@ const CONTROLLER_FACTORIES: Record<string, () => GameControllerView> = {
   'texas-poker': () => new PokerController(),
   'ludo-3d': () => new LudoController(),
   'bomber-party': () => new BomberController(),
+  'minigolf-3d': () => new MiniGolfController(),
 };
 
 export function createControllerForGame(gameId: string | null): GameControllerView {
