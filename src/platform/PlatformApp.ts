@@ -12,7 +12,6 @@ import { PacGame } from '../games/pacman/PacGame';
 import { NeonSerpentGame } from '../games/snake/NeonSerpentGame';
 import { LiarsDiceGame } from '../games/liars-dice/LiarsDiceGame';
 import { PokerGame } from '../games/poker/PokerGame';
-import { BomberGame } from '../games/bomber/BomberGame';
 import { LudoGame } from '../games/ludo/LudoGame';
 import { BomberGame } from '../games/bomber/BomberGame';
 
@@ -51,7 +50,6 @@ export class PlatformApp {
     new NeonSerpentGame(),
     new LiarsDiceGame(),
     new PokerGame(),
-    new BomberGame(),
     new LudoGame(),
     new BomberGame(),
   ];

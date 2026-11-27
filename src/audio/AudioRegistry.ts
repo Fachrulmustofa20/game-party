@@ -1,7 +1,6 @@
 import { SpaceAudioEngine } from '../games/dogfight/SpaceAudioEngine';
 import { LiarsDiceAudioEngine } from '../games/liars-dice/LiarsDiceAudioEngine';
 import { PokerAudioEngine } from '../games/poker/PokerAudioEngine';
-import { BomberAudioEngine } from '../games/bomber/BomberAudioEngine';
 import { LudoAudioEngine } from '../games/ludo/LudoAudioEngine';
 import { BomberAudioEngine } from '../games/bomber/BomberAudioEngine';
 import { DefaultAudioEngine, GameAudioEngine } from './GameAudioEngine';
@@ -17,7 +16,6 @@ const AUDIO_FACTORIES: Record<string, () => GameAudioEngine> = {
   'space-dogfight-2p': () => new SpaceAudioEngine(),
   'liars-dice': () => new LiarsDiceAudioEngine(),
   'texas-poker': () => new PokerAudioEngine(),
-  'bomber-party': () => new BomberAudioEngine(),
   'ludo-3d': () => new LudoAudioEngine(),
   'bomber-party': () => new BomberAudioEngine(),
 };
